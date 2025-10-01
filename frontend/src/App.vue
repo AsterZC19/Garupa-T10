@@ -37,13 +37,26 @@
 
     <main class="space-y-6 transition-opacity" :class="{ 'opacity-50 pointer-events-none': isRefreshing }">
       <div>
-        <h3 class="font-semibold mb-2 text-center">档位时速 (Top 10)</h3>
+        <h3 class="font-semibold mb-2 text-center">T10时速</h3>
         <TopPlayersTable :players="topPlayers" />
       </div>
       <div>
         <h3 class="font-semibold mb-2 text-center">时速曲线</h3>
         <ChartComponent :series="series" :current-event="currentEvent" />
       </div>
+      <!-- 页脚 -->
+      <footer class="mt-10 text-center text-xs text-gray-400">
+        由
+        <span class="text-pink-400">❤</span>
+        构建 /
+        <a href="https://github.com/AsterZC19/Garupa-T10" target="_blank" rel="noopener" class="underline hover:text-blue-500">
+          GitHub
+        </a>
+        / CDN by
+        <a href="https://cdn.sharon.io/aff.php?aff=101" target="_blank" rel="noopener" class="underline hover:text-blue-500">
+          Sharon CDN
+        </a>
+      </footer>
     </main>
   </div>
 </template>

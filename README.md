@@ -1,5 +1,7 @@
 # バンドリ！ ガールズバンドパーティ！T10 Web Event Tracker
 
+WebSite: [Garupa T10](https://t10.starminus.uk/)
+
 ## ✨ 功能列表
 
 - **活动选择**：自由选择查看当前或任一过往活动的数据。
