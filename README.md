@@ -95,7 +95,7 @@ pip install gunicorn
 # -w 4 表示启动 4 个工作进程
 # -b 0.0.0.0:5000 表示监听在 5000 端口
 # backend.app:app 指向 backend/app.py 文件中的 app 实例
-gunicorn -w 4 -b 0.0.0.0:5000 backend.app:app
+gunicorn -w 4 -b 0.0.0.0:5000 app:app --chdir backend
 ```
 
 ### 3. (可选) 使用 Nginx 作为反向代理

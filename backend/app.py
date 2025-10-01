@@ -1,8 +1,10 @@
 # backend/app.py
-import os
+import sys, os
 from flask import Flask, send_from_directory
 from models import db
 from scheduler import init_scheduler
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 app = Flask(__name__, static_folder='../frontend/dist', static_url_path='/')
 
