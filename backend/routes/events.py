@@ -1,11 +1,16 @@
 # backend/routes/events.py
 from flask import Blueprint, jsonify, request, current_app
 from datetime import datetime
+import time # Added for cooldown
 from models import db
 from models import Event, Score, ChartPoint
 from services.fetcher import parse_and_store_event_data
 
 events_bp = Blueprint('events', __name__)
+
+# In-memory store for last refresh timestamps (event_id -> timestamp)
+_last_refresh_time = {}
+REFRESH_COOLDOWN = 30  # 30 seconds
 
 @events_bp.route('/', methods=['GET'])
 def list_events():
@@ -29,7 +34,26 @@ def get_event(event_id):
     refresh_needed = False
 
     if force_refresh:
-        refresh_needed = True
+        now = time.time()
+        last_refresh = _last_refresh_time.get(event_id, 0)
+        if now - last_refresh < REFRESH_COOLDOWN:
+            current_app.logger.info(f"Skipping force refresh for event {event_id} due to cooldown.")
+            # If we have existing data, return it, otherwise indicate error
+            if e:
+                return jsonify({
+                    'event_id': e.event_id,
+                    'name': e.name,
+                    'type': e.event_type,
+                    'start_at': e.start_at,
+                    'end_at': e.end_at,
+                    'banner_url': e.banner_url,
+                    'description': e.description
+                })
+            else:
+                return jsonify({'error': 'event not found and refresh on cooldown'}), 404
+        else:
+            refresh_needed = True
+            _last_refresh_time[event_id] = now # Tentatively set time
     elif not e:
         refresh_needed = True
     else:
@@ -44,6 +68,8 @@ def get_event(event_id):
         success = parse_and_store_event_data(event_id)
         if not success:
             # If fetch fails, we might still proceed with stale data if it exists
+            if force_refresh: # if we failed, roll back the timestamp so user can try again sooner
+                _last_refresh_time[event_id] = 0
             if not e:
                 return jsonify({'error': 'event not found'}), 404
         # Re-fetch from DB to get the updated data

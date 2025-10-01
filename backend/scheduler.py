@@ -1,5 +1,6 @@
 # backend/scheduler.py
 import requests
+import time
 from apscheduler.schedulers.background import BackgroundScheduler
 from models import db, Event
 from services.fetcher import parse_and_store_event_data, BESTDORI
@@ -29,38 +30,29 @@ def discover_new_events(app):
             logging.info(f"Found {len(existing_event_ids)} events in the local database.")
 
             # 3. Compare and find new events
-            new_events_found = 0
-            # Sort events by ID descending to process newest first
+            new_event_ids = []
             sorted_event_ids = sorted(all_events_data.keys(), key=int, reverse=True)
 
             for event_id in sorted_event_ids:
-                # Per user request, ignore the placeholder event 5001
                 if event_id == '5001':
                     continue
-
                 if event_id not in existing_event_ids:
-                    new_events_found += 1
-                    logging.info(f"New event found: {event_id}. Adding to database.")
-                    event_data = all_events_data[event_id]
-                    
-                    # 4. Create and save the new event
-                    name = event_data.get('eventName', [''])[0]
-                    event_type = event_data.get('eventType', '')
-                    start_at = event_data.get('startAt', ['0'])[0]
-                    end_at = event_data.get('endAt', ['0'])[0]
+                    new_event_ids.append(event_id)
 
-                    new_event = Event(
-                        event_id=str(event_id),
-                        name=name,
-                        event_type=event_type,
-                        start_at=int(start_at) if start_at else 0,
-                        end_at=int(end_at) if end_at else 0
-                    )
-                    db.session.add(new_event)
-            
-            if new_events_found > 0:
-                db.session.commit()
-                logging.info(f"Successfully added {new_events_found} new events to the database.")
+            if new_event_ids:
+                logging.info(f"Found {len(new_event_ids)} new events. Fetching data...")
+                # Process newest new event first
+                for event_id in new_event_ids:
+                    logging.info(f"Processing new event: {event_id}")
+                    try:
+                        # This function will create the event if it doesn't exist
+                        parse_and_store_event_data(event_id)
+                        logging.info(f"Successfully processed event {event_id}. Waiting 10 seconds...")
+                        time.sleep(10)
+                    except Exception as e:
+                        logging.error(f"Failed to process new event {event_id}: {e}", exc_info=True)
+                        # Wait before trying the next one to avoid cascading failures
+                        time.sleep(10)
             else:
                 logging.info("No new events found.")
 
@@ -94,7 +86,7 @@ def init_scheduler(app):
     # Discover new events every hour
     scheduler.add_job(discover_new_events, 'interval', args=[app], hours=1, misfire_grace_time=900)
     # Update the latest event every 15 minutes
-    scheduler.add_job(update_latest_event, 'interval', args=[app], minutes=5, misfire_grace_time=300)
+    scheduler.add_job(update_latest_event, 'interval', args=[app], minutes=10, misfire_grace_time=300)
     
     scheduler.start()
     logging.info("Scheduler started. Jobs scheduled.")
