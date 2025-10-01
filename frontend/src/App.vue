@@ -10,16 +10,17 @@
     </header>
 
     <!-- Event Name and Banner Section -->
-    <section v-if="currentEvent" class="flex items-stretch justify-between mb-6 gap-6" :class="{ 'opacity-50': isRefreshing }">
-      <div class="flex-grow flex flex-col h-full">
+    <section v-if="currentEvent" class="flex flex-col-reverse md:flex-row items-center md:items-stretch justify-between mb-6 gap-6" :class="{ 'opacity-50': isRefreshing }">
+      <!-- Event Name and Details (now first for large screen row layout) -->
+      <div class="flex-grow flex flex-col h-full text-center">
         <div class="flex flex-col justify-center flex-1">
-          <h1 class="text-2xl font-bold mb-2 text-center event-title bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-pink-400 hover:scale-105 transition-transform">{{ eventName }}</h1>
+          <h1 class="text-2xl font-bold mb-2 event-title bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-pink-400 hover:scale-105 transition-transform">{{ eventName }}</h1>
           <div class="flex gap-4 text-sm text-gray-700 justify-center mb-2">
             <div>类型: {{ eventTypeZh(currentEvent.type) }}</div>
             <div>开始: {{ formatTs(currentEvent.start_at) }}</div>
             <div>结束: {{ formatTs(currentEvent.end_at) }}</div>
           </div>
-          <p v-if="!isCurrent" class="text-yellow-600 mt-2 text-center">当前未有进行中的活动（显示最近活动）</p>
+          <p v-if="!isCurrent" class="text-yellow-600 mt-2">当前未有进行中的活动（显示最近活动）</p>
         </div>
         <div class="text-center text-xs text-gray-400 mb-2 mt-4">
           感谢
@@ -27,8 +28,9 @@
           提供数据
         </div>
       </div>
-      <div v-if="currentEvent.banner_url" class="flex-shrink-0 flex items-center">
-        <img :src="currentEvent.banner_url" alt="Event Banner" style="width: auto; height: auto; max-width: 100%;" />
+      <!-- Banner Image (now second for large screen row layout, but appears first on mobile due to flex-col-reverse) -->
+      <div v-if="currentEvent.banner_url" class="flex-shrink-0 flex items-center mb-4 md:mb-0">
+        <img :src="currentEvent.banner_url" alt="Event Banner" class="max-w-full h-auto" />
       </div>
     </section>
 
