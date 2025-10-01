@@ -116,3 +116,6 @@ jspm_packages/
 
 # Frontend build output
 frontend/dist
+
+# Ignore local index.html changes for Umami tracking
+frontend/index.html
