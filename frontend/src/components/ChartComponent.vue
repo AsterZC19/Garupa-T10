@@ -1,12 +1,10 @@
 <template>
-  <div
-    class="relative w-full aspect-[2/1.2] min-h-[400px] sm:min-h-[500px] md:min-h-[600px]"
-  >
+  <div class="relative w-full h-[800px] sm:h-[900px] md:h-[1000px] lg:h-[1100px]">
     <div class="flex justify-end gap-2 mb-2">
       <button @click="hideAll" class="px-2 py-1 text-xs border rounded bg-gray-100 hover:bg-gray-200">隐藏所有</button>
       <button @click="showAll" class="px-2 py-1 text-xs border rounded bg-gray-100 hover:bg-gray-200">显示所有</button>
     </div>
-    <canvas ref="canvasRef" class="w-full h-full"></canvas>
+    <canvas ref="canvasRef" class="w-full h-full block"></canvas>
   </div>
 </template>
 
@@ -90,7 +88,6 @@ const draw = () => {
     },
     options: {
       maintainAspectRatio: false, // 不维持固定宽高比
-      aspectRatio: 1.5,  // 设置期望的宽高比
       responsive: true,  // 保持响应式
       interaction: {
         mode: 'nearest',
@@ -98,7 +95,12 @@ const draw = () => {
       },
       plugins: {
         legend: {
-          position: 'top'
+          position: 'top',
+          fullSize: true,
+          labels: {
+            boxWidth: 12,
+            font: { size: 12 } // 调小字体
+          }
         }
       },
       scales: {
