@@ -58,8 +58,9 @@ def get_event(event_id):
         refresh_needed = True
     else:
         now_ms = int(datetime.utcnow().timestamp() * 1000)
-        # Check if the event is ongoing or has ended recently (e.g., within the last 2 days)
-        is_recent_or_ongoing = e.end_at > (now_ms - 2 * 24 * 3600 * 1000)
+        # Check if the event is ongoing or has ended recently (e.g., within the last 2 days) + 30 min grace period
+        GRACE_PERIOD_MS = 30 * 60 * 1000 # 30 minutes in milliseconds
+        is_recent_or_ongoing = (e.end_at + GRACE_PERIOD_MS) > (now_ms - 2 * 24 * 3600 * 1000)
         if is_recent_or_ongoing and (now_ms - e.updated_at) > (15 * 60 * 1000):
             refresh_needed = True
 
