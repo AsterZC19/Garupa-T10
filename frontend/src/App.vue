@@ -5,7 +5,8 @@
         <EventSelector :events="events" v-model="selectedEventId" />
       </div>
       <button @click="forceRefresh" :disabled="isRefreshing" class="px-3 py-1 border rounded bg-gray-100 hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed">
-        {{ isRefreshing ? '刷新中...' : '刷新' }}
+        <span class="hidden sm:inline">{{ isRefreshing ? '刷新中...' : '刷新' }}</span>
+        <span class="sm:hidden">{{ isRefreshing ? '刷新中...' : '刷新' }}</span>
       </button>
     </header>
 
