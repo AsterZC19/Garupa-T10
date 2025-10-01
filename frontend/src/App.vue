@@ -13,7 +13,7 @@
     <section v-if="currentEvent" class="flex items-stretch justify-between mb-6 gap-6" :class="{ 'opacity-50': isRefreshing }">
       <div class="flex-grow flex flex-col h-full">
         <div class="flex flex-col justify-center flex-1">
-          <h1 class="text-2xl font-bold mb-2 text-center">{{ eventName }}</h1>
+          <h1 class="text-2xl font-bold mb-2 text-center event-title bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-pink-400 hover:scale-105 transition-transform">{{ eventName }}</h1>
           <div class="flex gap-4 text-sm text-gray-700 justify-center mb-2">
             <div>类型: {{ eventTypeZh(currentEvent.type) }}</div>
             <div>开始: {{ formatTs(currentEvent.start_at) }}</div>
@@ -208,3 +208,21 @@ function eventTypeZh(type) {
   }
 }
 </script>
+
+<style>
+.event-title {
+  text-shadow: 0 0 1px rgba(0,0,0,0.1);
+  animation: titleFade 0.5s ease-in-out;
+}
+
+@keyframes titleFade {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+</style>
