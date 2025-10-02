@@ -31,19 +31,15 @@
           <p class="text-lg text-gray-600 mt-1">等级 {{ playerData.profile.rank }}</p>
         </div>
         
-        <!-- Introduction -->
-        <div class="text-center p-4 border-b">
-          <p class="text-lg text-gray-700 italic">"{{ playerData.profile.introduction || '' }}"</p>
-        </div>
-
         <!-- Degrees -->
-        <div v-if="playerData.profile.userProfileDegreeMap && playerData.profile.userProfileDegreeMap.entries">
-          <h3 class="text-xl font-semibold text-gray-800 mb-4 text-center">称号</h3>
+        <div v-if="playerData.profile.userProfileDegreeMap && playerData.profile.userProfileDegreeMap.entries && allDegreesData" class="pb-4 border-b">
           <div class="flex flex-wrap justify-center gap-2">
             <div v-for="degree in playerData.profile.userProfileDegreeMap.entries" :key="degree.degreeId">
-              <img :src="`
-https://bestdori.com/assets/jp/thumb/degree_rip/degree${degree.degreeId}.png`" :alt="`Degree ${degree.degreeId}`" class="h-12"/>
+              <DegreeDisplay :degreeId="degree.degreeId" :allDegreesData="allDegreesData" />
             </div>
+          </div>
+          <div class="text-center p-4 border-b">
+            <p class="text-lg text-gray-700 italic">"{{ playerData.profile.introduction || '' }}"</p>
           </div>
         </div>
 
@@ -115,10 +111,23 @@ https://bestdori.com/assets/jp/thumb/degree_rip/degree${degree.degreeId}.png`" :
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import api from '../api';
 import PlayerSearch from '../components/PlayerSearch.vue';
+import DegreeDisplay from '../components/DegreeDisplay.vue';
+
+const allDegreesData = ref(null);
+
+onMounted(async () => {
+  try {
+    const response = await fetch('/api/degrees/all.3.json'); // Changed URL
+    allDegreesData.value = await response.json();
+    console.log('Fetched allDegreesData:', allDegreesData.value);
+  } catch (error) {
+    console.error('Failed to fetch degrees data:', error);
+  }
+});
 
 const route = useRoute();
 const router = useRouter();

@@ -22,9 +22,11 @@ import models  # noqa
 from routes.events import events_bp
 from routes.player import player_bp
 from routes.card import card_bp
+from routes.degree import degree_bp # New import
 app.register_blueprint(events_bp, url_prefix='/api/events')
 app.register_blueprint(player_bp, url_prefix='/api/player')
 app.register_blueprint(card_bp, url_prefix='/api/cards')
+app.register_blueprint(degree_bp, url_prefix='/api/degrees') # New registration
 
 # create tables
 with app.app_context():
