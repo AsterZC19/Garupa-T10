@@ -11,24 +11,25 @@
 
     <div v-else-if="playerData && playerData.profile" class="bg-white shadow-xl rounded-lg overflow-hidden max-w-4xl mx-auto">
       <!-- Main Illustration Section -->
-      <div v-if="leaderCardInfo" class="relative bg-gray-200">
+      <div v-if="leaderCardIllustUrl" class="relative bg-gray-200">
         <img 
-          :src="leaderCardInfo.illustUrl"
+          :src="leaderCardIllustUrl"
           alt="Player Illustration"
           class="w-full h-auto object-cover"
         />
-        <div class="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black/70 to-transparent">
-          <h2 class="text-3xl sm:text-4xl font-bold text-white shadow-lg">{{ playerData.profile.userName || '&nbsp;' }}</h2>
-          <div class="flex items-center text-gray-200 mt-2">
-            <img src="https://bestdori.com/res/icon/server_jp.png" alt="JP Server" class="h-5 w-5 mr-2">
-            <span class="text-lg">UID: {{ playerData.profile.publishUserIdFlg ? playerData.profile.userId : 'ID未公开' }}</span>
-          </div>
-          <p class="text-lg text-gray-200 mt-1">等级 {{ playerData.profile.rank }}</p>
-        </div>
       </div>
 
       <!-- Player Details Block -->
       <div class="p-4 sm:p-6 space-y-6">
+
+        <!-- Player Info -->
+        <div class="text-center border-b pb-6">
+          <h2 class="text-3xl sm:text-4xl font-bold text-gray-800">{{ playerData.profile.userName || '&nbsp;' }}</h2>
+          <div class="flex items-center justify-center text-gray-600 mt-2">
+            <span class="text-lg">UID: {{ playerData.profile.publishUserIdFlg ? playerData.profile.userId : 'ID未公开' }}</span>
+          </div>
+          <p class="text-lg text-gray-600 mt-1">等级 {{ playerData.profile.rank }}</p>
+        </div>
         
         <!-- Introduction -->
         <div class="text-center p-4 border-b">
@@ -131,21 +132,60 @@ const searchedUid = ref('');
 const playerData = ref(null);
 const isLoading = ref(false);
 
-const leaderCardInfo = computed(() => {
-  if (!playerData.value || !playerData.value.profile) return null;
+const leaderCardIllustUrl = ref(null);
 
-  const profile = playerData.value.profile;
-  const leaderId = profile.mainUserDeck?.leader;
-  if (!leaderId) return null;
+watch(playerData, async (newPlayerData) => {
+  if (!newPlayerData || !newPlayerData.profile) {
+    leaderCardIllustUrl.value = null;
+    return;
+  }
+  
+  const profile = newPlayerData.profile;
+  let cardId = null;
+  let isTrained = false;
 
-  const leaderCard = profile.mainDeckUserSituations?.entries.find(s => s.situationId === leaderId);
-  if (!leaderCard) return null;
+  // Priority 1: Use userProfileSituation if it exists
+  if (profile.userProfileSituation) {
+    cardId = profile.userProfileSituation.situationId;
+    isTrained = profile.userProfileSituation.illust === 'after_training';
+  } else if (profile.userIllust) { // Priority 2: Use userIllust if it exists
+    cardId = profile.userIllust.cardId;
+    isTrained = !!profile.userIllust.trainingStatus;
+  } else { // Fallback: Use the leader of the main deck
+    const leaderId = profile.mainUserDeck?.leader;
+    if (leaderId) {
+      const leaderCard = profile.mainDeckUserSituations?.entries.find(s => s.situationId === leaderId);
+      if (leaderCard) {
+        cardId = leaderCard.situationId;
+        isTrained = leaderCard.trainingStatus === 'done';
+      }
+    }
+  }
 
-  const isTrained = leaderCard.trainingStatus === 'done';
-  return {
-    illustUrl: `https://bestdori.com/res/card/${leaderCard.situationId}_rip/card_trim${isTrained ? '_after_training' : ''}.png`,
-  };
-});
+  if (cardId) {
+    try {
+      const res = await api.get(`/api/cards/${cardId}`);
+      const cardDetails = res.data;
+      if (cardDetails && cardDetails.resourceSetName) {
+        const trainingString = isTrained ? '_after_training' : '';
+        // Correct URL structure based on previous context
+        // https://bestdori.com/assets/jp/characters/resourceset/res004075_rip/trim_after_training.png
+        leaderCardIllustUrl.value = `https://bestdori.com/assets/jp/characters/resourceset/${cardDetails.resourceSetName}_rip/trim${trainingString}.png`;
+      } else {
+        // Fallback to old URL structure if API fails or resourceSetName is missing
+        const trainingString = isTrained ? '_after_training' : '';
+        leaderCardIllustUrl.value = `https://bestdori.com/res/card/${cardId}_rip/trim${trainingString}.png`;
+      }
+    } catch (error) {
+      console.error('Failed to get card details for illustration:', error);
+      // Fallback to old URL structure on error
+      const trainingString = isTrained ? '_after_training' : '';
+      leaderCardIllustUrl.value = `https://bestdori.com/res/card/${cardId}_rip/trim${trainingString}.png`;
+    }
+  } else {
+    leaderCardIllustUrl.value = null;
+  }
+}, { immediate: true });
 
 const handleSearch = () => {
   if (inputUid.value) {
