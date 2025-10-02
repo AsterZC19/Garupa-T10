@@ -28,7 +28,11 @@
             <div class="flex items-center pl-16">
 
               <!-- 标题 -->
-              <h1 class="text-xl font-semibold text-gray-800 ml-4">日服 T10 追踪</h1>
+              <router-link to="/" class="ml-4">
+                <h1 class="text-xl font-semibold text-gray-800 hover:text-indigo-500 transition-colors">
+                  日服 T10 追踪
+                </h1>
+              </router-link>
             </div>
           </div>
         </div>
