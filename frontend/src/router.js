@@ -9,20 +9,27 @@ const routes = [
     component: EventView,
   },
   {
-    path: '/:eventId',
+    path: '/:eventId(\\d+)',
     name: 'Event',
     component: EventView,
+    props: true, // 让 eventId 直接作为 props 传入组件
   },
   {
     path: '/player',
     name: 'Player',
-    component: PlayerSearchView, // Corrected
+    component: PlayerSearchView,
   },
   {
     path: '/player/:uid',
     name: 'PlayerDetail',
-    component: PlayerSearchView, // Corrected
-  },];
+    component: PlayerSearchView,
+    props: true, // uid 直接作为 props
+  },
+  {
+    path: '/:catchAll(.*)', // 捕获所有未匹配路由，重定向到首页
+    redirect: '/',
+  },
+];
 
 const router = createRouter({
   history: createWebHistory(),
