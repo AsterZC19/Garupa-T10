@@ -17,7 +17,17 @@
       <tbody>
         <tr v-for="(p, idx) in players" :key="p.uid">
           <td class="p-2 border text-center whitespace-nowrap">{{ p.rank || (idx + 1) }}</td>
-          <td class="p-2 border text-center whitespace-nowrap">{{ p.uid }}</td>
+          <td class="p-2 border text-center whitespace-nowrap">
+            <router-link
+              v-if="p.uid"
+              :to="`/player/${p.uid}`"
+              class="text-indigo-600 hover:underline"
+            >
+              {{ p.uid }}
+            </router-link>
+            <span v-else>-</span>
+          </td>
+
           <td class="p-2 border whitespace-nowrap">{{ p.name }}</td>
           <td class="p-2 border text-center whitespace-nowrap">
             {{ typeof p.pt === 'number' ? p.pt.toLocaleString() : p.pt }}

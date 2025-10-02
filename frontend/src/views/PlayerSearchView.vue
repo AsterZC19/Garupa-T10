@@ -14,7 +14,7 @@
         <!-- Left Column: Illustration, Player Info, Degrees, Introduction -->
         <div class="md:w-1/2 p-4 sm:p-6 space-y-6">
           <!-- Main Illustration Section -->
-          <div v-if="leaderCardIllustUrl" class="relative bg-gray-200">
+          <div v-if="leaderCardIllustUrl" class="relative">
             <img 
               :src="leaderCardIllustUrl"
               alt="Player Illustration"
@@ -33,12 +33,16 @@
           
           <!-- Degrees -->
           <div v-if="playerData.profile.userProfileDegreeMap && playerData.profile.userProfileDegreeMap.entries && allDegreesData" class="pb-4">
-            <div class="flex flex-wrap justify-center gap-2">
-              <div v-for="degree in playerData.profile.userProfileDegreeMap.entries" :key="degree.degreeId">
-                <DegreeDisplay :degreeId="degree.degreeId" :allDegreesData="allDegreesData" />
-              </div>
-            </div>
-          </div>
+                      <div v-if="playerData.profile.userProfileDegreeMap.entries.length === 1" class="flex justify-center">
+                        <div v-for="degree in playerData.profile.userProfileDegreeMap.entries" :key="degree.degreeId">
+                          <DegreeDisplay :degreeId="degree.degreeId" :allDegreesData="allDegreesData" />
+                        </div>
+                      </div>
+                      <div v-else class="flex flex-wrap justify-center gap-2">
+                        <div v-for="degree in playerData.profile.userProfileDegreeMap.entries" :key="degree.degreeId">
+                          <DegreeDisplay :degreeId="degree.degreeId" :allDegreesData="allDegreesData" />
+                        </div>
+                      </div>          </div>
 
           <!-- Introduction -->
           <div class="text-center p-4">
@@ -68,7 +72,7 @@
               </ul>
             </div>
             <div v-else class="text-center py-8">
-              <p class="text-gray-500">该玩家暂无 T10 记录。</p>
+              <p class="text-gray-500">该玩家暂无 T10 记录。（暂未实现）</p>
             </div>
           </div>
           <div v-if="playerData.profile.mainDeckUserSituations && playerData.profile.mainDeckUserSituations.entries">
@@ -187,19 +191,19 @@ watch(playerData, async (newPlayerData) => {
       const res = await api.get(`/api/cards/${cardId}`);
       const cardDetails = res.data;
       if (cardDetails && cardDetails.resourceSetName) {
-        const trainingString = isTrained ? '_after_training' : '';
+        const trainingString = isTrained ? '_after_training' : '_normal';
         // Correct URL structure based on previous context
         // https://bestdori.com/assets/jp/characters/resourceset/res004075_rip/trim_after_training.png
         leaderCardIllustUrl.value = `https://bestdori.com/assets/jp/characters/resourceset/${cardDetails.resourceSetName}_rip/trim${trainingString}.png`;
       } else {
         // Fallback to old URL structure if API fails or resourceSetName is missing
-        const trainingString = isTrained ? '_after_training' : '';
+        const trainingString = isTrained ? '_after_training' : '_normal';
         leaderCardIllustUrl.value = `https://bestdori.com/res/card/${cardId}_rip/trim${trainingString}.png`;
       }
     } catch (error) {
       console.error('Failed to get card details for illustration:', error);
       // Fallback to old URL structure on error
-      const trainingString = isTrained ? '_after_training' : '';
+      const trainingString = isTrained ? '_after_training' : '_normal';
       leaderCardIllustUrl.value = `https://bestdori.com/res/card/${cardId}_rip/trim${trainingString}.png`;
     }
   } else {
