@@ -42,9 +42,7 @@ app.register_blueprint(player_bp, url_prefix='/api/player')
 app.register_blueprint(card_bp, url_prefix='/api/cards')
 app.register_blueprint(degree_bp, url_prefix='/api/degrees')
 
-# create tables
-with app.app_context():
-    db.create_all()
+
 
 # serve frontend static (after build)
 @app.route('/', defaults={'path': ''})
