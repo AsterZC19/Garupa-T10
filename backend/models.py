@@ -30,6 +30,8 @@ class Score(db.Model):
     signature = db.Column(db.String, nullable=True)
     updated_at = db.Column(db.Integer, default=now_ms)
 
+    __table_args__ = (db.Index('ix_scores_event_id_pt', "event_id", "pt"), )
+
 class ChartPoint(db.Model):
     __tablename__ = 'chart_points'
     id = db.Column(db.Integer, primary_key=True)

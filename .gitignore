@@ -119,3 +119,8 @@ frontend/dist
 
 # Ignore local index.html changes for Umami tracking
 frontend/index.html
+
+# Additional database files for WAL mode
+backend/*.db-journal
+backend/*.db-wal
+backend/*.db-shm
