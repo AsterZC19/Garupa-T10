@@ -87,18 +87,16 @@ def update_t10_achievements(app):
     with app.app_context():
         logging.info("Scheduler: Running update_t10_achievements task...")
         try:
-            # 1. Get the last processed event ID, creating it if it doesn't exist.
             last_processed_event_state = AppState.query.filter_by(key='last_processed_t10_event_id').first()
             if not last_processed_event_state:
                 logging.info("First run for T10 achievements, creating initial state.")
                 last_processed_event_state = AppState(key='last_processed_t10_event_id', value='0')
                 db.session.add(last_processed_event_state)
-                db.session.commit() # Commit immediately to prevent race conditions
+                db.session.commit()
 
             last_processed_event_id = int(last_processed_event_state.value)
-
-            # 2. Find events that have ended and have not been processed yet
             current_time_ms = int(time.time() * 1000)
+
             unprocessed_events = Event.query.filter(
                 Event.end_at < current_time_ms,
                 cast(Event.event_id, Integer) > last_processed_event_id
@@ -111,31 +109,28 @@ def update_t10_achievements(app):
             max_processed_id = last_processed_event_id
             for event in unprocessed_events:
                 logging.info(f"Processing T10 achievements for event: {event.event_id} - {event.name}")
-                
-                # 3. Get T10 scores for the event
-                t10_scores = Score.query.filter(
-                    Score.event_id == event.event_id,
-                    Score.rank <= 10
-                ).all()
 
-                for score in t10_scores:
-                    # Avoid duplicates
+                # 🔹 按 pt 降序获取前 10
+                t10_scores = Score.query.filter(
+                    Score.event_id == event.event_id
+                ).order_by(Score.pt.desc()).limit(10).all()
+
+                # 重新给他们排 rank
+                for idx, score in enumerate(t10_scores, start=1):
                     exists = PlayerDegree.query.filter_by(uid=score.uid, event_id=score.event_id).first()
                     if not exists:
-                        degree_id = get_degree_id_for_rank(score.rank)
+                        degree_id = get_degree_id_for_rank(idx)
                         if degree_id:
                             new_achievement = PlayerDegree(
                                 uid=score.uid,
                                 event_id=score.event_id,
-                                rank=score.rank,
+                                rank=idx,   # 🔹 用真实的 pt 排名
                                 degree_id=degree_id
                             )
                             db.session.add(new_achievement)
-                
-                # Update the max processed ID for this batch
+
                 max_processed_id = max(max_processed_id, int(event.event_id))
 
-            # 4. Update the state and commit
             last_processed_event_state.value = str(max_processed_id)
             db.session.commit()
             logging.info(f"Successfully processed {len(unprocessed_events)} events for T10. Last processed event ID is now {max_processed_id}.")
@@ -143,6 +138,7 @@ def update_t10_achievements(app):
         except Exception as e:
             logging.error(f"An error occurred in update_t10_achievements: {e}", exc_info=True)
             db.session.rollback()
+
 
 # --- End of New Task ---
 

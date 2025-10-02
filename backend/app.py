@@ -5,6 +5,10 @@ from models import db
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# frontend_path = '/root/Garupa-T10/frontend/dist' # 绝对路径 
+# basedir = os.path.abspath(os.path.dirname(__file__)) 
+# app = Flask(__name__, static_folder=frontend_path, static_url_path='/assets')
+
 basedir = os.path.abspath(os.path.dirname(__file__))
 app = Flask(__name__, static_folder=os.path.join(basedir, '..', 'frontend', 'dist'), static_url_path='/assets')
 
