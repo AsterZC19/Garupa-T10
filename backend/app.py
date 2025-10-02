@@ -7,7 +7,7 @@ from scheduler import init_scheduler
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 basedir = os.path.abspath(os.path.dirname(__file__))
-app = Flask(__name__, static_folder=os.path.join(basedir, '..', 'frontend', 'dist'), static_url_path='/')
+app = Flask(__name__, static_folder=os.path.join(basedir, '..', 'frontend', 'dist'), static_url_path='/assets')
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_file = os.path.join(basedir, 'data.db')
