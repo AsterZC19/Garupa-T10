@@ -61,15 +61,19 @@
                   v-for="degree in playerData.profile.userProfileDegreeMap.entries"
                   :key="degree.degreeId"
                 >
-                  <DegreeDisplay :degreeId="degree.degreeId" :allDegreesData="allDegreesData" />
+                  <div class="transform scale-75 h-10">
+                    <DegreeDisplay :degreeId="degree.degreeId" :allDegreesData="allDegreesData" />
+                  </div>
                 </div>
               </div>
-              <div v-else class="flex flex-wrap justify-center gap-2">
+              <div v-else class="flex flex-wrap justify-center gap-[2px]">
                 <div
                   v-for="degree in playerData.profile.userProfileDegreeMap.entries"
                   :key="degree.degreeId"
                 >
-                  <DegreeDisplay :degreeId="degree.degreeId" :allDegreesData="allDegreesData" />
+                  <div class="transform scale-75 h-10">
+                    <DegreeDisplay :degreeId="degree.degreeId" :allDegreesData="allDegreesData" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -87,46 +91,28 @@
 
             <!-- T10 记录 -->
             <div class="pt-4 border-b">
-              <div v-if="playerData.t10_events && playerData.t10_events.length > 0">
-                <h3 class="text-xl font-semibold text-gray-800 mb-4 text-center">T10 记录</h3>
-                <ul class="space-y-3 max-w-md mx-auto">
-                  <li
-                    v-for="event in playerData.t10_events"
-                    :key="event.event_id"
-                    class="p-3 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors duration-200"
-                  >
-                    <router-link
-                      :to="'/' + event.event_id"
-                      class="flex justify-between items-center group"
-                    >
-                      <div>
-                        <p class="font-semibold text-indigo-600 group-hover:underline">
-                          活动 #{{ event.event_id }}
-                        </p>
-                        <p class="text-sm text-gray-600">
-                          排名: <span class="font-medium">{{ event.rank }}</span>
-                        </p>
-                      </div>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="h-5 w-5 text-gray-400 group-hover:text-indigo-600 transition-transform duration-200 transform group-hover:translate-x-1"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M9 5l7 7-7 7"
-                        />
-                      </svg>
-                    </router-link>
-                  </li>
-                </ul>
+              <h3 class="text-xl font-semibold text-gray-800 mb-4 text-center">T10 记录</h3>
+              <div v-if="earnedDegrees && earnedDegrees.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div
+                  v-for="degree in earnedDegrees"
+                  :key="degree.event_id"
+                  class="p-2 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors duration-200 flex flex-col items-center"
+                >
+                  <router-link :to="'/' + degree.event_id" class="text-center mb-1">
+                    <p class="font-semibold text-indigo-600 group-hover:underline text-sm">
+                      活动 #{{ degree.event_id }}
+                    </p>
+                    <p class="text-xs text-gray-600">
+                      T<span class="font-medium">{{ degree.rank }}</span>
+                    </p>
+                  </router-link>
+                  <div class="transform scale-75 h-10">
+                    <DegreeDisplay :rank="degree.rank" :event_id="degree.event_id" />
+                  </div>
+                </div>
               </div>
               <div v-else class="text-center py-8">
-                <p class="text-gray-500">该玩家暂无 T10 记录。（暂未实现）</p>
+                <p class="text-gray-500">该玩家暂无 T10 记录。</p>
               </div>
             </div>
 
@@ -161,7 +147,7 @@
                     :alt="`Band ${bandId}`"
                     class="h-12 w-12 mb-1"
                   />
-                  <span class="font-semibold">Rank {{ rank }}</span>
+                  <span class="font-semibold">{{ rank }}</span>
                 </div>
               </div>
             </div>
@@ -255,6 +241,7 @@ const searchedUid = ref('');
 
 const playerData = ref(null);
 const isLoading = ref(false);
+const earnedDegrees = ref([]);
 
 const leaderCardIllustUrl = ref(null);
 
@@ -321,10 +308,16 @@ const fetchPlayerData = async (playerUid) => {
   if (!playerUid) return;
   isLoading.value = true;
   playerData.value = null;
+  earnedDegrees.value = [];
   searchedUid.value = playerUid;
   try {
     const res = await api.get(`/api/player/${playerUid}`);
     playerData.value = res.data;
+    
+    // Fetch all degrees
+    const degreesRes = await api.get(`/api/degrees/player/${playerUid}/all_degrees`);
+    earnedDegrees.value = degreesRes.data;
+
   } catch (error) {
     console.error('获取玩家数据失败:', error);
     playerData.value = null;

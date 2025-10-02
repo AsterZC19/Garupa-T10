@@ -26,62 +26,95 @@
 import { defineProps, computed } from 'vue';
 
 const props = defineProps({
+  // Old mode props
   degreeId: {
     type: Number,
-    required: true
+    required: false
   },
   allDegreesData: {
     type: Object,
-    required: true
+    required: false
+  },
+  // New mode props for event degrees
+  rank: {
+    type: Number,
+    required: false
+  },
+  event_id: {
+    type: String,
+    required: false
   }
 });
 
-const Bestdoriurl = 'https://bestdori.com'; // Assuming Bestdoriurl is constant
+const Bestdoriurl = 'https://bestdori.com';
 
-const degreeData = computed(() => {
-  return props.allDegreesData[props.degreeId.toString()];
-});
+// Helper to determine the rank suffix for URL construction
+const getRankSuffix = (rank) => {
+  if (rank === 1 || rank === 2 || rank === 3) {
+    return rank.toString();
+  }
+  if ((rank >= 4 && rank <= 10) || rank === 0) {
+    return '10';
+  }
+  return null;
+};
+
+const isNewMode = computed(() => props.rank !== undefined && props.event_id !== undefined);
 
 const baseImageUrl = computed(() => {
-  if (!degreeData.value || !degreeData.value.baseImageName) return null;
-  const baseName = degreeData.value.baseImageName[0]; // Assuming server 'jp' is index 0
-  if (baseName.startsWith("ani_")) {
-    // For animated degrees, we'll just use a static fallback for now
-    // or the first frame if a static representation is available.
-    // Bestdori often has a static version like 'degreeXXX.png'
-    // For simplicity, we'll try to construct a static URL if possible,
-    // otherwise, this will be null.
-    // This part needs more sophisticated logic if animated degrees are to be fully supported.
-    // For now, we'll return null for animated degrees, or a placeholder.
-    return null; // Or a placeholder image URL
+  if (isNewMode.value) {
+    return `${Bestdoriurl}/assets/jp/thumb/degree_rip/degree_event${props.event_id}_point.png`;
   }
-  return `${Bestdoriurl}/assets/jp/thumb/degree_rip/${baseName}.png`;
+  // --- Old Mode Logic ---
+  if (props.degreeId && props.allDegreesData) {
+    const degreeData = props.allDegreesData[props.degreeId.toString()];
+    if (!degreeData || !degreeData.baseImageName) return null;
+    const baseName = degreeData.baseImageName[0];
+    if (baseName.startsWith("ani_")) return null; // Animation not supported
+    return `${Bestdoriurl}/assets/jp/thumb/degree_rip/${baseName}.png`;
+  }
+  return null;
 });
 
 const frameImageUrl = computed(() => {
-  if (!degreeData.value || !degreeData.value.degreeType || !degreeData.value.rank) return null;
-  const degreeType = degreeData.value.degreeType[0]; // Assuming server 'jp' is index 0
-  const rank = degreeData.value.rank[0]; // Assuming server 'jp' is index 0
-
-  if (degreeType === "normal" || degreeType === null || rank === 'none') {
-    return null;
+  if (isNewMode.value) {
+    const rankSuffix = getRankSuffix(props.rank);
+    if (!rankSuffix) return null;
+    return `${Bestdoriurl}/assets/jp/thumb/degree_rip/event_point_${rankSuffix}.png`;
   }
-  const frameName = `${degreeType}_${rank}`;
-  return `${Bestdoriurl}/assets/jp/thumb/degree_rip/${frameName}.png`;
+  // --- Old Mode Logic ---
+  if (props.degreeId && props.allDegreesData) {
+    const degreeData = props.allDegreesData[props.degreeId.toString()];
+    if (!degreeData || !degreeData.degreeType || !degreeData.rank) return null;
+    const degreeType = degreeData.degreeType[0];
+    const rank = degreeData.rank[0];
+    if (degreeType === "normal" || degreeType === null || rank === 'none') return null;
+    const frameName = `${degreeType}_${rank}`;
+    return `${Bestdoriurl}/assets/jp/thumb/degree_rip/${frameName}.png`;
+  }
+  return null;
 });
 
 const iconImageUrl = computed(() => {
-  if (!degreeData.value || !degreeData.value.iconImageName || !degreeData.value.rank) return null;
-  const iconName = degreeData.value.iconImageName[0]; // Assuming server 'jp' is index 0
-  const degreeType = degreeData.value.degreeType[0]; // Assuming server 'jp' is index 0
-  const rank = degreeData.value.rank[0]; // Assuming server 'jp' is index 0
-
-  if (iconName === "none" || degreeType === "try_clear") { // "try_clear" degrees don't have an icon on the left
-    return null;
+  if (isNewMode.value) {
+    const rankSuffix = getRankSuffix(props.rank);
+    if (!rankSuffix) return null;
+    return `${Bestdoriurl}/assets/jp/thumb/degree_rip/event_point_icon_${rankSuffix}.png`;
   }
-  const fullIconName = `${iconName}_${rank}`;
-  return `${Bestdoriurl}/assets/jp/thumb/degree_rip/${fullIconName}.png`;
+  // --- Old Mode Logic ---
+  if (props.degreeId && props.allDegreesData) {
+    const degreeData = props.allDegreesData[props.degreeId.toString()];
+    if (!degreeData || !degreeData.iconImageName || !degreeData.rank) return null;
+    const iconName = degreeData.iconImageName[0];
+    const degreeType = degreeData.degreeType[0];
+    if (iconName === "none" || degreeType === "try_clear") return null;
+    const rank = degreeData.rank[0];
+    const fullIconName = `${iconName}_${rank}`;
+    return `${Bestdoriurl}/assets/jp/thumb/degree_rip/${fullIconName}.png`;
+  }
+  return null;
 });
+
 </script>
 
 <style scoped>

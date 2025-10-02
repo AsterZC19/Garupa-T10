@@ -11,7 +11,11 @@ app = Flask(__name__, static_folder=os.path.join(basedir, '..', 'frontend', 'dis
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_file = os.path.join(basedir, 'data.db')
+degrees_db_file = os.path.join(basedir, 'degrees.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_file}"
+app.config['SQLALCHEMY_BINDS'] = {
+    'degrees': f"sqlite:///{degrees_db_file}"
+}
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
@@ -27,7 +31,7 @@ from routes.degree import degree_bp # New import
 app.register_blueprint(events_bp, url_prefix='/api/events')
 app.register_blueprint(player_bp, url_prefix='/api/player')
 app.register_blueprint(card_bp, url_prefix='/api/cards')
-app.register_blueprint(degree_bp, url_prefix='/api/degrees') # New registration
+app.register_blueprint(degree_bp, url_prefix='/api/degrees')
 
 # create tables
 with app.app_context():

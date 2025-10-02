@@ -38,3 +38,18 @@ class ChartPoint(db.Model):
     name = db.Column(db.String)
     timestamp = db.Column(db.Integer)  # ms
     pt = db.Column(db.Integer)
+
+class AppState(db.Model):
+    __tablename__ = 'app_state'
+    __bind_key__ = 'degrees'
+    key = db.Column(db.String, primary_key=True)
+    value = db.Column(db.String)
+
+class PlayerDegree(db.Model):
+    __tablename__ = 'player_degrees'
+    __bind_key__ = 'degrees'
+    id = db.Column(db.Integer, primary_key=True)
+    uid = db.Column(db.String, index=True)
+    event_id = db.Column(db.String, index=True)
+    rank = db.Column(db.Integer)
+    degree_id = db.Column(db.Integer)

@@ -62,6 +62,90 @@ def discover_new_events(app):
 
 from sqlalchemy import cast, Integer
 
+# --- New T10 Achievement Processing Task ---
+from models import Score, PlayerDegree, AppState
+
+RANK_TO_DEGREE_ID = {
+    1: 47,  # T1
+    2: 48,  # T2
+    3: 49,  # T3
+    10: 50, # T4-T10
+}
+
+def get_degree_id_for_rank(rank):
+    if rank == 1: return RANK_TO_DEGREE_ID[1]
+    if rank == 2: return RANK_TO_DEGREE_ID[2]
+    if rank == 3: return RANK_TO_DEGREE_ID[3]
+    if (4 <= rank <= 10) or (rank == 0): # Treat rank 0 as a T10 finish
+        return RANK_TO_DEGREE_ID[10]
+    return None
+
+def update_t10_achievements(app):
+    """
+    Checks for newly finished events since the last run and records T10 achievements.
+    """
+    with app.app_context():
+        logging.info("Scheduler: Running update_t10_achievements task...")
+        try:
+            # 1. Get the last processed event ID, creating it if it doesn't exist.
+            last_processed_event_state = AppState.query.filter_by(key='last_processed_t10_event_id').first()
+            if not last_processed_event_state:
+                logging.info("First run for T10 achievements, creating initial state.")
+                last_processed_event_state = AppState(key='last_processed_t10_event_id', value='0')
+                db.session.add(last_processed_event_state)
+                db.session.commit() # Commit immediately to prevent race conditions
+
+            last_processed_event_id = int(last_processed_event_state.value)
+
+            # 2. Find events that have ended and have not been processed yet
+            current_time_ms = int(time.time() * 1000)
+            unprocessed_events = Event.query.filter(
+                Event.end_at < current_time_ms,
+                cast(Event.event_id, Integer) > last_processed_event_id
+            ).order_by(cast(Event.event_id, Integer).asc()).all()
+
+            if not unprocessed_events:
+                logging.info("No new finished events to process for T10 achievements.")
+                return
+
+            max_processed_id = last_processed_event_id
+            for event in unprocessed_events:
+                logging.info(f"Processing T10 achievements for event: {event.event_id} - {event.name}")
+                
+                # 3. Get T10 scores for the event
+                t10_scores = Score.query.filter(
+                    Score.event_id == event.event_id,
+                    Score.rank <= 10
+                ).all()
+
+                for score in t10_scores:
+                    # Avoid duplicates
+                    exists = PlayerDegree.query.filter_by(uid=score.uid, event_id=score.event_id).first()
+                    if not exists:
+                        degree_id = get_degree_id_for_rank(score.rank)
+                        if degree_id:
+                            new_achievement = PlayerDegree(
+                                uid=score.uid,
+                                event_id=score.event_id,
+                                rank=score.rank,
+                                degree_id=degree_id
+                            )
+                            db.session.add(new_achievement)
+                
+                # Update the max processed ID for this batch
+                max_processed_id = max(max_processed_id, int(event.event_id))
+
+            # 4. Update the state and commit
+            last_processed_event_state.value = str(max_processed_id)
+            db.session.commit()
+            logging.info(f"Successfully processed {len(unprocessed_events)} events for T10. Last processed event ID is now {max_processed_id}.")
+
+        except Exception as e:
+            logging.error(f"An error occurred in update_t10_achievements: {e}", exc_info=True)
+            db.session.rollback()
+
+# --- End of New Task ---
+
 def update_latest_event(app):
     """
     Fetches full data for the most recent event to ensure data is fresh.
@@ -80,24 +164,28 @@ def update_latest_event(app):
         except Exception as e:
             logging.error(f"An error occurred in update_latest_event: {e}", exc_info=True)
 
+from apscheduler.executors.pool import ThreadPoolExecutor
+
 def init_scheduler(app):
     """Initializes and starts the scheduler."""
-    scheduler = BackgroundScheduler(daemon=True)
+    executors = {
+        'default': ThreadPoolExecutor(1)
+    }
+    scheduler = BackgroundScheduler(executors=executors, daemon=True)
     # Discover new events every hour
     scheduler.add_job(discover_new_events, 'interval', args=[app], hours=1, misfire_grace_time=900)
     # Update the latest event every 15 minutes
     scheduler.add_job(update_latest_event, 'interval', args=[app], minutes=10, misfire_grace_time=300)
+    # Process T10 achievements every hour
+    scheduler.add_job(update_t10_achievements, 'interval', args=[app], hours=1, misfire_grace_time=900)
     
     scheduler.start()
-    logging.info("Scheduler started. Jobs scheduled.")
+    logging.info("Scheduler started with a single worker thread. Jobs scheduled.")
 
-    # Run jobs immediately on startup in a separate thread to not block app start
-    import threading
-    def run_startup_jobs():
-        with app.app_context():
-            logging.info("Running startup jobs...")
-            discover_new_events(app)
-            update_latest_event(app)
-            logging.info("Startup jobs finished.")
-    
-    threading.Thread(target=run_startup_jobs).start()
+    # Run jobs immediately on startup in the main thread to ensure sync and avoid race conditions.
+    with app.app_context():
+        logging.info("Running startup jobs synchronously...")
+        discover_new_events(app)
+        update_latest_event(app)
+        update_t10_achievements(app)
+        logging.info("Startup jobs finished.")
