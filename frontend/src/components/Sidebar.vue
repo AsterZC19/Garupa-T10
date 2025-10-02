@@ -1,5 +1,5 @@
 <template>
-  <aside class="bg-gray-800 text-white w-64 min-h-screen p-4 fixed top-0 left-0 h-full z-40 transform transition-transform" :class="{'-translate-x-full': !isOpen}">
+  <aside class="bg-gray-800 text-white w-56 min-h-screen p-4 fixed top-0 left-0 h-full z-40 transform transition-transform" :class="{'-translate-x-full': !isOpen}">
     <!-- <h2 class="text-xl font-bold mb-4">导航</h2> -->
     <nav>
       <ul>

@@ -20,7 +20,9 @@ import models  # noqa
 
 # register routes
 from routes.events import events_bp
+from routes.player import player_bp
 app.register_blueprint(events_bp, url_prefix='/api/events')
+app.register_blueprint(player_bp, url_prefix='/api/player')
 
 # create tables
 with app.app_context():

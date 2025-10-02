@@ -1,6 +1,7 @@
 <template>
   <div class="flex items-center gap-2">
-    <select v-model="value" class="px-3 py-1 border rounded max-w-[150px] sm:max-w-xs overflow-hidden text-ellipsis whitespace-nowrap">
+    <select v-model="value" class="px-3 py-1 border rounded max-w-[250px] sm:max-w-xs                 │
+ │      overflow-hidden text-ellipsis whitespace-nowrap">
       <option v-for="e in events" :key="e.event_id" :value="e.event_id">
         {{ e.event_id }} - {{ e.name }} ({{ formatTs(e.start_at) }})
       </option>

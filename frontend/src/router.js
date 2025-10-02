@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import EventView from './views/EventView.vue';
-import PlayerSearch from './components/PlayerSearch.vue';
+import PlayerSearchView from './views/PlayerSearchView.vue';
 
 const routes = [
   {
@@ -9,21 +9,20 @@ const routes = [
     component: EventView,
   },
   {
-    path: '/:eventId(\d+)',
+    path: '/:eventId',
     name: 'Event',
     component: EventView,
   },
   {
     path: '/player',
     name: 'Player',
-    component: PlayerSearch,
+    component: PlayerSearchView, // Corrected
   },
   {
-    path: '/player/:uid(\d+)',
+    path: '/player/:uid',
     name: 'PlayerDetail',
-    component: PlayerSearch,
-  },
-];
+    component: PlayerSearchView, // Corrected
+  },];
 
 const router = createRouter({
   history: createWebHistory(),

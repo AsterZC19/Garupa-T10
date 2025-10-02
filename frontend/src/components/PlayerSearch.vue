@@ -1,46 +1,28 @@
 <template>
-  <div class="p-4">
-    <h1 class="text-2xl font-bold mb-4">玩家查询</h1>
-    <div class="flex gap-2">
-      <input v-model="uid" @keyup.enter="search" class="border p-2 rounded w-full" placeholder="输入玩家 UID" />
-      <button @click="search" class="bg-blue-500 text-white px-4 py-2 rounded">查询</button>
-    </div>
-    <div v-if="searchedUid" class="mt-4">
-      <h2 class="text-xl">查询的UID: {{ searchedUid }}</h2>
-      <p>(这里将来会显示玩家的数据)</p>
-    </div>
+  <div class="relative shadow-md rounded-md">
+    <input 
+      :value="modelValue"
+      @input="$emit('update:modelValue', $event.target.value)"
+      @keyup.enter="performSearch" 
+      class="w-full p-3 pr-24 rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 transition"
+      placeholder="输入玩家 UID" 
+    />
+    <button 
+      @click="performSearch" 
+      class="absolute inset-y-0 right-0 px-5 m-1 rounded-md bg-indigo-600 text-white font-semibold hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+    >
+      查询
+    </button>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+// Support v-model
+defineProps(['modelValue']);
+const emit = defineEmits(['update:modelValue', 'search']);
 
-const uid = ref('');
-const searchedUid = ref('');
-const router = useRouter();
-const route = useRoute();
-
-const search = () => {
-  if (uid.value) {
-    router.push({ path: `/player/${uid.value}` });
-  }
+const performSearch = () => {
+  // Emit search event without payload, parent has the value via v-model
+  emit('search');
 };
-
-onMounted(() => {
-  if (route.params.uid) {
-    uid.value = route.params.uid;
-    searchedUid.value = route.params.uid;
-  }
-});
-
-watch(() => route.params.uid, (newUid) => {
-  if (newUid) {
-    uid.value = newUid;
-    searchedUid.value = newUid;
-  } else {
-    uid.value = '';
-    searchedUid.value = '';
-  }
-});
 </script>
