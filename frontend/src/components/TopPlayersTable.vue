@@ -21,7 +21,7 @@
             <router-link
               v-if="p.uid"
               :to="`/player/${p.uid}`"
-              class="text-indigo-600 hover:underline"
+              class="text-[#9999FF] hover:underline"
             >
               {{ p.uid }}
             </router-link>
