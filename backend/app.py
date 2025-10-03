@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # app = Flask(__name__, static_folder=frontend_path, static_url_path='/assets')
 
 basedir = os.path.abspath(os.path.dirname(__file__))
-app = Flask(__name__, static_folder=os.path.join(basedir, '..', 'frontend', 'dist'), static_url_path='/assets')
+app = Flask(__name__)
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_file = os.path.join(basedir, 'data.db')
@@ -49,9 +49,13 @@ app.register_blueprint(degree_bp, url_prefix='/api/degrees')
 
 
 # serve frontend static (after build)
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve(path):
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
-    return send_from_directory(app.static_folder, 'index.html')
+# @app.route('/', defaults={'path': ''})
+# @app.route('/<path:path>')
+# def serve(path):
+#     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+#         return send_from_directory(app.static_folder, path)
+#     return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/')
+def health():
+    return {'status': 'ok', 'message': 'Backend is running'}
