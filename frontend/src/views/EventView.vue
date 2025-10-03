@@ -42,7 +42,7 @@
       </div>
       <div>
         <h3 class="font-semibold mb-2 text-center">时速曲线</h3>
-        <ChartComponent :series="series" :current-event="currentEvent" />
+        <ChartComponent :series="chartSeries" :current-event="currentEvent" />
       </div>
       <br />
       <!-- 页脚 -->
@@ -81,11 +81,22 @@ const currentEvent = ref(null)
 const isCurrent = ref(true)
 const scores = ref([])
 const topPlayers = ref([])
-const series = ref({})
+const chartSeries = ref({})
 
 const eventName = computed(() => currentEvent.value ? currentEvent.value.name : '加载中...')
 
 const isRefreshing = ref(false)
+
+async function loadChartData(eid, interval) {
+  if (!eid) return
+  try {
+    const res = await api.get(`/api/events/${eid}/chart?interval=${interval}`)
+    chartSeries.value = res.data
+  } catch (error) {
+    console.error(`获取图表数据失败 (interval: ${interval}):`, error)
+    chartSeries.value = {}
+  }
+}
 
 async function loadEventData(eid, hour, force = false) {
   if (!eid) return
@@ -103,25 +114,23 @@ async function loadEventData(eid, hour, force = false) {
       params.append('hour', hour)
     }
 
-    const [scoresRes, seriesRes, topPlayersRes] = await Promise.all([
+    // Load scores and top players in parallel
+    const [scoresRes, topPlayersRes] = await Promise.all([
       api.get(`/api/events/${eid}/scores?limit=50&${params.toString()}`),
-      api.get(`/api/events/${eid}/chart?${params.toString()}`),
       api.get(`/api/events/${eid}/top_players?limit=10&${params.toString()}`) 
     ])
     
     scores.value = scoresRes.data
     topPlayers.value = topPlayersRes.data
-    const newSeries = seriesRes.data || {}
-    
-    for (const uid in newSeries) {
-      const found = scores.value.find(s => s.uid === uid)
-      if (found) newSeries[uid].name = found.name
-    }
-    series.value = newSeries
+
+    // Progressively load chart data
+    await loadChartData(eid, '1h') // Load coarse data first
+    await loadChartData(eid, '15m') // Then load detailed data
+
   } catch (error) {
     console.error('获取活动数据失败:', error)
     scores.value = []
-    series.value = {}
+    chartSeries.value = {}
     topPlayers.value = []
   } finally {
     isRefreshing.value = false

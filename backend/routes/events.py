@@ -159,13 +159,19 @@ def get_chart(event_id):
         user_points_raw[p.uid].append(p)
 
     series = {}
-    # 5. Down-sample for each user to 15-minute intervals
+    # 5. Down-sample for each user
+    # Determine bucket size based on request parameter
+    requested_interval = request.args.get('interval', '15m')
+    if requested_interval == '1h':
+        bucket_ms = 3600000 # 1 hour
+    else: # Default to 15m
+        bucket_ms = 900000 # 15 minutes
+
     for uid, points_list in user_points_raw.items():
         bucketed_points = {}
-        # 15 minutes = 900,000 milliseconds
         for p in points_list:
-            bucket_key = p.timestamp // 900000
-            # Keep the last point in each 15-min bucket
+            bucket_key = p.timestamp // bucket_ms
+            # Keep the last point in each bucket
             bucketed_points[bucket_key] = {'t': p.timestamp, 'pt': p.pt}
         
         if not bucketed_points:
