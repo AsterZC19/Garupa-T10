@@ -6,3 +6,4 @@ python-dotenv==1.0.0
 pandas==2.2.3
 gunicorn
 honcho
+waitress

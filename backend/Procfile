@@ -1,2 +1,2 @@
-web: flask run --host=0.0.0.0 --port=11112
+web: waitress-serve --listen=0.0.0.0:11112 --threads=4 app:app
 worker: python run_scheduler.py
