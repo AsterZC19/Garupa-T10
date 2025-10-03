@@ -2,9 +2,12 @@
 import requests
 import time
 from apscheduler.schedulers.background import BackgroundScheduler
-from models import db, Event
+from models import db, Event, PlayerDegree, AppState, PlayerScoreHistory
 from services.fetcher import parse_and_store_event_data, BESTDORI
 import logging
+from apscheduler.executors.pool import ThreadPoolExecutor
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 logging.basicConfig(level=logging.INFO)
 
@@ -219,38 +222,48 @@ def record_top_10_scores(app):
 
             # Step 3: Combine and save the top 10
             t10_ranking = definitive_ranking[:10]
-            timestamp_ms = int(time.time() * 1000)
-            history_records = []
+            
+            # --- Update Score Table (Snapshot) ---
             score_records_to_upsert = []
-
             for i, ranking_info in enumerate(t10_ranking):
-                rank = i + 1
                 uid = ranking_info['uid']
-                pt = ranking_info['pt']
-                
                 meta = user_meta_map.get(uid, {})
-                name = meta.get('name', uid)
-                sig = meta.get('introduction', '')
-
-                # Prepare records for bulk upsert/insert
                 score_records_to_upsert.append({
-                    'event_id': event_id, 'uid': uid, 'name': name, 'pt': pt, 
-                    'rank': rank, 'signature': sig, 'updated_at': timestamp_ms
+                    'event_id': event_id, 'uid': uid, 'name': meta.get('name', uid),
+                    'pt': ranking_info['pt'], 'rank': i + 1, 'signature': meta.get('introduction', ''),
+                    'updated_at': ranking_info['timestamp'] # Use API timestamp
                 })
-                history_records.append(
-                    PlayerScoreHistory(event_id=event_id, uid=uid, pt=pt, timestamp=timestamp_ms)
-                )
-
-            # Bulk upsert into Score table
+            
             if score_records_to_upsert:
-                # This is a simplified upsert. For SQLite, this means DELETE then INSERT for the top 10.
-                # A more complex merge would be needed for other DBs.
                 db.session.query(Score).filter(Score.event_id == event_id).delete(synchronize_session=False)
                 db.session.bulk_insert_mappings(Score, score_records_to_upsert)
 
-            # Bulk insert into history
-            if history_records:
-                db.session.bulk_save_objects(history_records)
+            # --- Update PlayerScoreHistory Table (Append Only) ---
+            # Check which of the latest points from the API are already in our history table
+            latest_points_tuples = [(str(p['uid']), p['timestamp']) for p in definitive_ranking]
+            
+            existing_points = db.session.query(PlayerScoreHistory.uid, PlayerScoreHistory.timestamp).filter(
+                PlayerScoreHistory.event_id == event_id,
+                db.tuple_(PlayerScoreHistory.uid, PlayerScoreHistory.timestamp).in_(latest_points_tuples)
+            ).all()
+            existing_set = set(existing_points)
+
+            history_records_to_add = []
+            for ranking_info in definitive_ranking:
+                uid = ranking_info['uid']
+                timestamp = ranking_info['timestamp']
+                if (uid, timestamp) not in existing_set:
+                    history_records_to_add.append(
+                        PlayerScoreHistory(
+                            event_id=event_id,
+                            uid=uid,
+                            pt=ranking_info['pt'],
+                            timestamp=timestamp
+                        )
+                    )
+
+            if history_records_to_add:
+                db.session.bulk_save_objects(history_records_to_add)
 
             db.session.commit()
             # logging.info(f"Successfully recorded and updated {len(history_records)} T10 scores for event {event_id}.")
@@ -265,7 +278,7 @@ def record_top_10_scores(app):
 def backfill_previous_hour_data(app):
     """
     Runs once on startup to backfill the entire event history, so stats and charts are available immediately.
-    Fetches the full 1-minute interval history and stores any points not already in the database.
+    Fetches the full 1-minute interval history and stores any points that are genuinely new and not out-of-order.
     """
     with app.app_context():
         logging.info("Running backfill_entire_history task...")
@@ -297,16 +310,28 @@ def backfill_previous_hour_data(app):
                 logging.info("Backfill: No points data found in response.")
                 return
 
-            # Avoid inserting duplicates by checking existing points
-            existing_points = db.session.query(PlayerScoreHistory.uid, PlayerScoreHistory.timestamp).filter_by(event_id=event_id).all()
-            existing_set = set(existing_points)
+            # --- Enhanced De-duplication and Out-of-Order Prevention ---
+            # 1. Get all existing points to check for duplicates
+            existing_points_query = db.session.query(PlayerScoreHistory.uid, PlayerScoreHistory.timestamp).filter_by(event_id=event_id).all()
+            existing_set = set(existing_points_query)
 
-            history_records = []
+            # 2. Get the latest timestamp for each user to prevent inserting older data
+            latest_user_timestamps = defaultdict(int)
+            for uid, timestamp in existing_points_query:
+                if timestamp > latest_user_timestamps[uid]:
+                    latest_user_timestamps[uid] = timestamp
+
+            history_records_to_add = []
             for p in points_data:
                 uid = str(p.get('uid'))
                 timestamp = p.get('time')
-                if (uid, timestamp) not in existing_set:
-                    history_records.append(
+                
+                # 3. Apply both checks
+                is_duplicate = (uid, timestamp) in existing_set
+                is_out_of_order = timestamp <= latest_user_timestamps[uid]
+
+                if not is_duplicate and not is_out_of_order:
+                    history_records_to_add.append(
                         PlayerScoreHistory(
                             event_id=event_id,
                             uid=uid,
@@ -315,10 +340,10 @@ def backfill_previous_hour_data(app):
                         )
                     )
 
-            if history_records:
-                db.session.bulk_save_objects(history_records)
+            if history_records_to_add:
+                db.session.bulk_save_objects(history_records_to_add)
                 db.session.commit()
-                logging.info(f"Backfill: Successfully stored {len(history_records)} new historical points.")
+                logging.info(f"Backfill: Successfully stored {len(history_records_to_add)} new historical points.")
             else:
                 logging.info("Backfill: No new historical points to store.")
 
