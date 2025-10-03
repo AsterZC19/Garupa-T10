@@ -101,6 +101,7 @@ async function loadChartData(eid, interval) {
 async function loadEventData(eid, hour, force = false) {
   if (!eid) return
   isRefreshing.value = true
+  chartSeries.value = {} // Clear chart data before loading
   try {
     const eventParams = new URLSearchParams();
     if (force) {
@@ -123,9 +124,8 @@ async function loadEventData(eid, hour, force = false) {
     scores.value = scoresRes.data
     topPlayers.value = topPlayersRes.data
 
-    // Progressively load chart data
-    await loadChartData(eid, '1h') // Load coarse data first
-    await loadChartData(eid, '15m') // Then load detailed data
+    // Load chart data in the background
+    loadChartData(eid, '15m')
 
   } catch (error) {
     console.error('获取活动数据失败:', error)
