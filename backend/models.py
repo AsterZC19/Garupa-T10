@@ -61,5 +61,6 @@ class PlayerScoreHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     event_id = db.Column(db.String, db.ForeignKey('events.event_id'), index=True)
     uid = db.Column(db.String, index=True)
+    name = db.Column(db.String, nullable=True) # New column for player name
     pt = db.Column(db.Integer)
     timestamp = db.Column(db.Integer, index=True) # ms

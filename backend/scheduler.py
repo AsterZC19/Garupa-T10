@@ -228,8 +228,12 @@ def record_top_10_scores(app):
             for i, ranking_info in enumerate(t10_ranking):
                 uid = ranking_info['uid']
                 meta = user_meta_map.get(uid, {})
+                name_from_meta = meta.get('name')
+                final_name = name_from_meta if name_from_meta and name_from_meta.strip() else uid
+                ranking_info['final_name'] = final_name # Store final_name in ranking_info
+
                 score_records_to_upsert.append({
-                    'event_id': event_id, 'uid': uid, 'name': meta.get('name', uid),
+                    'event_id': event_id, 'uid': uid, 'name': final_name,
                     'pt': ranking_info['pt'], 'rank': i + 1, 'signature': meta.get('introduction', ''),
                     'updated_at': ranking_info['timestamp'] # Use API timestamp
                 })
@@ -240,7 +244,7 @@ def record_top_10_scores(app):
 
             # --- Update PlayerScoreHistory Table (Append Only) ---
             # Check which of the latest points from the API are already in our history table
-            latest_points_tuples = [(str(p['uid']), p['timestamp']) for p in definitive_ranking]
+            latest_points_tuples = [(str(p['uid']), p['timestamp']) for p in t10_ranking]
             
             existing_points = db.session.query(PlayerScoreHistory.uid, PlayerScoreHistory.timestamp).filter(
                 PlayerScoreHistory.event_id == event_id,
@@ -249,7 +253,7 @@ def record_top_10_scores(app):
             existing_set = set(existing_points)
 
             history_records_to_add = []
-            for ranking_info in definitive_ranking:
+            for ranking_info in t10_ranking:
                 uid = ranking_info['uid']
                 timestamp = ranking_info['timestamp']
                 if (uid, timestamp) not in existing_set:
@@ -257,11 +261,11 @@ def record_top_10_scores(app):
                         PlayerScoreHistory(
                             event_id=event_id,
                             uid=uid,
+                            name=ranking_info['final_name'], # Use stored final_name
                             pt=ranking_info['pt'],
                             timestamp=timestamp
                         )
                     )
-
             if history_records_to_add:
                 db.session.bulk_save_objects(history_records_to_add)
 
@@ -306,6 +310,8 @@ def backfill_previous_hour_data(app):
 
             data = response.json()
             points_data = data.get('points', [])
+            users_data = data.get('users', []) # Missing line added
+
             if not points_data:
                 logging.info("Backfill: No points data found in response.")
                 return
@@ -321,12 +327,19 @@ def backfill_previous_hour_data(app):
                 if timestamp > latest_user_timestamps[uid]:
                     latest_user_timestamps[uid] = timestamp
 
+            # 3. Create a map for user names for efficiency
+            name_map = {str(u.get('uid')): u.get('name', '') for u in users_data}
+
             history_records_to_add = []
             for p in points_data:
                 uid = str(p.get('uid'))
                 timestamp = p.get('time')
                 
-                # 3. Apply both checks
+                # Determine name for this point
+                name_from_meta = name_map.get(uid)
+                final_name = name_from_meta if name_from_meta and name_from_meta.strip() else uid
+
+                # 4. Apply both checks
                 is_duplicate = (uid, timestamp) in existing_set
                 is_out_of_order = timestamp <= latest_user_timestamps[uid]
 
@@ -335,6 +348,7 @@ def backfill_previous_hour_data(app):
                         PlayerScoreHistory(
                             event_id=event_id,
                             uid=uid,
+                            name=final_name, # Add name here
                             pt=p.get('value'),
                             timestamp=timestamp
                         )

@@ -138,24 +138,28 @@ def get_chart(event_id):
     if not event:
         return jsonify({'error': 'event not found'}), 404
 
-    # Get the UIDs and names of the current top 10 players from the Score table
-    top_10_scores = Score.query.filter_by(event_id=event_id).order_by(Score.pt.desc()).limit(10).all()
-    top_10_uids = [s.uid for s in top_10_scores]
-    name_map = {s.uid: s.name for s in top_10_scores}
+    # 1. Fetch all historical points for the event from the high-resolution table
+    all_history_points = PlayerScoreHistory.query.filter_by(event_id=event_id).order_by(PlayerScoreHistory.timestamp.asc()).all()
+    if not all_history_points:
+        return jsonify({})
 
-    # Fetch all history for these top 10 UIDs from the high-resolution table
-    pts = PlayerScoreHistory.query.filter(
-        PlayerScoreHistory.event_id == event_id,
-        PlayerScoreHistory.uid.in_(top_10_uids)
-    ).order_by(PlayerScoreHistory.timestamp.asc()).all()
-    
-    # Group points by user
+    # 2. Get all unique UIDs that have ever appeared in the history for this event
+    all_uids_in_history = list(set([p.uid for p in all_history_points]))
+
+    # 3. Get the most recent names for these UIDs from the PlayerScoreHistory table itself
+    # We can get distinct UIDs and their latest names from the history
+    # This is a bit tricky as name can change, so we'll just take the name from the latest point for each UID
+    name_map = {}
+    for p in all_history_points:
+        name_map[p.uid] = p.name # Overwrite with later names, effectively getting the latest
+
+    # 4. Group all points by user
     user_points_raw = defaultdict(list)
-    for p in pts:
+    for p in all_history_points:
         user_points_raw[p.uid].append(p)
 
     series = {}
-    # Down-sample for each user to 15-minute intervals
+    # 5. Down-sample for each user to 15-minute intervals
     for uid, points_list in user_points_raw.items():
         bucketed_points = {}
         # 15 minutes = 900,000 milliseconds
@@ -164,6 +168,9 @@ def get_chart(event_id):
             # Keep the last point in each 15-min bucket
             bucketed_points[bucket_key] = {'t': p.timestamp, 'pt': p.pt}
         
+        if not bucketed_points:
+            continue
+
         sampled_points = sorted(bucketed_points.values(), key=lambda x: x['t'])
         series[uid] = {'name': name_map.get(uid, uid), 'points': sampled_points}
 
