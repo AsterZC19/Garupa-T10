@@ -41,6 +41,8 @@ class ChartPoint(db.Model):
     timestamp = db.Column(db.Integer)  # ms
     pt = db.Column(db.Integer)
 
+    __table_args__ = (db.Index('ix_chart_points_event_id_uid_timestamp', "event_id", "uid", "timestamp"), )
+
 class AppState(db.Model):
     __tablename__ = 'app_state'
     __bind_key__ = 'degrees'
@@ -56,6 +58,8 @@ class PlayerDegree(db.Model):
     rank = db.Column(db.Integer)
     degree_id = db.Column(db.Integer)
 
+    __table_args__ = (db.Index('ix_player_degrees_uid_event_id', "uid", "event_id"), )
+
 class PlayerScoreHistory(db.Model):
     __tablename__ = 'player_score_history'
     id = db.Column(db.Integer, primary_key=True)
@@ -64,3 +68,5 @@ class PlayerScoreHistory(db.Model):
     name = db.Column(db.String, nullable=True) # New column for player name
     pt = db.Column(db.Integer)
     timestamp = db.Column(db.Integer, index=True) # ms
+
+    __table_args__ = (db.Index('ix_player_score_history_event_id_uid_timestamp', "event_id", "uid", "timestamp"), )

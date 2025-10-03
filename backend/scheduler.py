@@ -355,6 +355,10 @@ def backfill_all_events_history(app):
             sorted_events_to_backfill = sorted(list(events_to_backfill), key=int)
 
             for event_id in sorted_events_to_backfill:
+                # Per user request, skip events up to 111 as they have no data
+                if int(event_id) <= 111:
+                    continue
+
                 if event_id == '5001':
                     continue
                 
@@ -419,7 +423,8 @@ def backfill_all_events_history(app):
 def init_scheduler(app):
     """Initializes and starts the scheduler with aligned job start times."""
     executors = {
-        'default': ThreadPoolExecutor(1)
+        'default': ThreadPoolExecutor(2),  # Pool for heavy, long-running jobs
+        'priority': ThreadPoolExecutor(2) # Dedicated pool for time-sensitive jobs
     }
     scheduler = BackgroundScheduler(executors=executors, daemon=True)
     
@@ -428,14 +433,14 @@ def init_scheduler(app):
     next_minute = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
     next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
 
-    # Discover new events every hour, starting at the top of the next hour
-    scheduler.add_job(discover_new_events, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900)
+    # Assign heavy jobs to the 'default' executor
+    scheduler.add_job(discover_new_events, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='default')
     
-    # Process T10 achievements every hour, starting at the top of the next hour
-    scheduler.add_job(update_t10_achievements, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900)
+    # Assign heavy jobs to the 'default' executor
+    scheduler.add_job(update_t10_achievements, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='default')
     
-    # Record T10 scores every minute, starting at the top of the next minute
-    scheduler.add_job(record_top_10_scores, 'interval', args=[app], minutes=1, start_date=next_minute, misfire_grace_time=60)
+    # Assign the time-sensitive job to the 'priority' executor
+    scheduler.add_job(record_top_10_scores, 'interval', args=[app], minutes=1, start_date=next_minute, misfire_grace_time=60, executor='priority', max_instances=1)
     
     scheduler.start()
     logging.info(f"Scheduler started. Jobs aligned to start at the top of the minute/hour.")
