@@ -147,8 +147,9 @@ async function forceRefresh() {
 async function loadEventsList() {
   try {
     const res = await api.get('/api/events/')
-    events.value = res.data
-    return res.data
+    const sortedEvents = res.data.sort((a, b) => b.event_id - a.event_id)
+    events.value = sortedEvents
+    return sortedEvents
   } catch (error) {
     console.error('获取活动列表失败:', error)
     return []
