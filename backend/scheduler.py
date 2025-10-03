@@ -13,8 +13,9 @@ logging.basicConfig(level=logging.INFO)
 
 def discover_new_events(app):
     """
-    Fetches the complete list of events from Bestdori, identifies new events 
-    not present in the local database, and adds them.
+    Fetches the complete list of events from Bestdori, identifies new events,
+    adds them to the database, and immediately backfills their entire 1-minute
+    interval score history.
     """
     with app.app_context():
         logging.info("Scheduler: Running discover_new_events task...")
@@ -42,22 +43,71 @@ def discover_new_events(app):
                 if event_id not in existing_event_ids:
                     new_event_ids.append(event_id)
 
-            if new_event_ids:
-                logging.info(f"Found {len(new_event_ids)} new events. Fetching data...")
-                # Process newest new event first
-                for event_id in new_event_ids:
-                    logging.info(f"Processing new event: {event_id}")
-                    try:
-                        # This function will create the event if it doesn't exist
-                        parse_and_store_event_data(event_id)
-                        logging.info(f"Successfully processed event {event_id}. Waiting 10 seconds...")
-                        time.sleep(10)
-                    except Exception as e:
-                        logging.error(f"Failed to process new event {event_id}: {e}", exc_info=True)
-                        # Wait before trying the next one to avoid cascading failures
-                        time.sleep(10)
-            else:
+            if not new_event_ids:
                 logging.info("No new events found.")
+                return
+
+            logging.info(f"Found {len(new_event_ids)} new events. Processing and backfilling...")
+            for event_id in new_event_ids:
+                try:
+                    logging.info(f"Processing new event: {event_id}")
+                    # Step A: Create the base event record so other tasks can see it
+                    parse_and_store_event_data(event_id)
+                    logging.info(f"Successfully created base record for event {event_id}.")
+
+                    # Step B: Backfill the entire 1-minute history for the new event
+                    logging.info(f"Backfilling 1-min interval data for new event {event_id}.")
+                    url = f"https://bestdori.com/api/eventtop/data?server=jp&event={event_id}&mid=0&interval=60000"
+                    response = requests.get(url, timeout=60)
+                    if response.status_code != 200:
+                        logging.error(f"Backfill failed for new event {event_id}. Status: {response.status_code}")
+                        # Skip to next event, but wait to avoid hammering API
+                        time.sleep(10)
+                        continue
+
+                    data = response.json()
+                    points_data = data.get('points', [])
+                    users_data = data.get('users', [])
+
+                    if not points_data:
+                        logging.info(f"No points data to backfill for new event {event_id}.")
+                        time.sleep(10) # Still wait before next event
+                        continue
+                    
+                    name_map = {str(u.get('uid')): u.get('name', '') for u in users_data}
+                    
+                    history_records_to_add = []
+                    for p in points_data:
+                        uid = str(p.get('uid'))
+                        name_from_meta = name_map.get(uid)
+                        final_name = name_from_meta if name_from_meta and name_from_meta.strip() else uid
+                        
+                        history_records_to_add.append(
+                            PlayerScoreHistory(
+                                event_id=event_id,
+                                uid=uid,
+                                name=final_name,
+                                pt=p.get('value'),
+                                timestamp=p.get('time')
+                            )
+                        )
+                    
+                    if history_records_to_add:
+                        # Use a transaction to add all records for this event
+                        db.session.bulk_save_objects(history_records_to_add)
+                        db.session.commit()
+                        logging.info(f"Successfully backfilled {len(history_records_to_add)} historical points for event {event_id}.")
+                    else:
+                        logging.info(f"No new historical points to backfill for event {event_id}.")
+
+                    logging.info(f"Successfully processed and backfilled event {event_id}. Waiting 10 seconds...")
+                    time.sleep(10)
+
+                except Exception as e:
+                    logging.error(f"Failed to process new event {event_id}: {e}", exc_info=True)
+                    db.session.rollback()
+                    # Wait before trying the next one to avoid cascading failures
+                    time.sleep(10)
 
         except Exception as e:
             logging.error(f"An error occurred in discover_new_events: {e}", exc_info=True)
@@ -278,93 +328,93 @@ def record_top_10_scores(app):
 
 # --- End of New Task ---
 
-# --- New Backfill Task ---
-def backfill_previous_hour_data(app):
+def backfill_all_events_history(app):
     """
-    Runs once on startup to backfill the entire event history, so stats and charts are available immediately.
-    Fetches the full 1-minute interval history and stores any points that are genuinely new and not out-of-order.
+    Runs once on startup to backfill history for any existing events that
+    are missing it in the PlayerScoreHistory table.
     """
     with app.app_context():
-        logging.info("Running backfill_entire_history task...")
+        logging.info("Scheduler: Running backfill_all_events_history task...")
         try:
-            current_time_ms = int(datetime.utcnow().timestamp() * 1000)
+            # 1. Get all event IDs from the main Event table
+            all_db_events = {str(e.event_id) for e in Event.query.with_entities(Event.event_id).all()}
+            
+            # 2. Get all event IDs that already have some data in the history table
+            events_with_history = {str(h.event_id) for h in PlayerScoreHistory.query.with_entities(PlayerScoreHistory.event_id).distinct().all()}
 
-            active_event = Event.query.filter(
-                Event.start_at <= current_time_ms,
-                Event.end_at >= current_time_ms
-            ).order_by(Event.start_at.desc()).first()
-
-            if not active_event:
-                logging.info("Backfill: No active event found.")
+            # 3. Find events that need backfilling
+            events_to_backfill = all_db_events - events_with_history
+            
+            if not events_to_backfill:
+                logging.info("Backfill: All existing events already have score history. Nothing to do.")
                 return
 
-            event_id = active_event.event_id
-            logging.info(f"Backfill: Fetching full 1-min interval data for event {event_id}.")
+            logging.info(f"Backfill: Found {len(events_to_backfill)} events that need score history backfilled.")
 
-            # Fetch the complete 1-minute interval history
-            url = f"https://bestdori.com/api/eventtop/data?server=jp&event={event_id}&mid=0&interval=60000"
-            response = requests.get(url, timeout=60)
-            if response.status_code != 200:
-                logging.error(f"Backfill: Failed to fetch data for event {event_id}. Status: {response.status_code}")
-                return
+            # Sort to process them in a predictable order (e.g., oldest to newest)
+            sorted_events_to_backfill = sorted(list(events_to_backfill), key=int)
 
-            data = response.json()
-            points_data = data.get('points', [])
-            users_data = data.get('users', []) # Missing line added
-
-            if not points_data:
-                logging.info("Backfill: No points data found in response.")
-                return
-
-            # --- Enhanced De-duplication and Out-of-Order Prevention ---
-            # 1. Get all existing points to check for duplicates
-            existing_points_query = db.session.query(PlayerScoreHistory.uid, PlayerScoreHistory.timestamp).filter_by(event_id=event_id).all()
-            existing_set = set(existing_points_query)
-
-            # 2. Get the latest timestamp for each user to prevent inserting older data
-            latest_user_timestamps = defaultdict(int)
-            for uid, timestamp in existing_points_query:
-                if timestamp > latest_user_timestamps[uid]:
-                    latest_user_timestamps[uid] = timestamp
-
-            # 3. Create a map for user names for efficiency
-            name_map = {str(u.get('uid')): u.get('name', '') for u in users_data}
-
-            history_records_to_add = []
-            for p in points_data:
-                uid = str(p.get('uid'))
-                timestamp = p.get('time')
+            for event_id in sorted_events_to_backfill:
+                if event_id == '5001':
+                    continue
                 
-                # Determine name for this point
-                name_from_meta = name_map.get(uid)
-                final_name = name_from_meta if name_from_meta and name_from_meta.strip() else uid
+                try:
+                    logging.info(f"Backfill: Processing event: {event_id}")
+                    
+                    # Fetch the complete 1-minute interval history
+                    url = f"https://bestdori.com/api/eventtop/data?server=jp&event={event_id}&mid=0&interval=60000"
+                    response = requests.get(url, timeout=60)
+                    if response.status_code != 200:
+                        logging.error(f"Backfill: Failed to fetch data for event {event_id}. Status: {response.status_code}")
+                        time.sleep(10) # Wait before next
+                        continue
 
-                # 4. Apply both checks
-                is_duplicate = (uid, timestamp) in existing_set
-                is_out_of_order = timestamp <= latest_user_timestamps[uid]
+                    data = response.json()
+                    points_data = data.get('points', [])
+                    users_data = data.get('users', [])
 
-                if not is_duplicate and not is_out_of_order:
-                    history_records_to_add.append(
-                        PlayerScoreHistory(
-                            event_id=event_id,
-                            uid=uid,
-                            name=final_name, # Add name here
-                            pt=p.get('value'),
-                            timestamp=timestamp
+                    if not points_data:
+                        logging.info(f"Backfill: No points data found for event {event_id}.")
+                        time.sleep(10) # Wait before next
+                        continue
+
+                    # Create a map for user names for efficiency
+                    name_map = {str(u.get('uid')): u.get('name', '') for u in users_data}
+
+                    history_records_to_add = []
+                    for p in points_data:
+                        uid = str(p.get('uid'))
+                        name_from_meta = name_map.get(uid)
+                        final_name = name_from_meta if name_from_meta and name_from_meta.strip() else uid
+                        
+                        history_records_to_add.append(
+                            PlayerScoreHistory(
+                                event_id=event_id,
+                                uid=uid,
+                                name=final_name,
+                                pt=p.get('value'),
+                                timestamp=p.get('time')
+                            )
                         )
-                    )
 
-            if history_records_to_add:
-                db.session.bulk_save_objects(history_records_to_add)
-                db.session.commit()
-                logging.info(f"Backfill: Successfully stored {len(history_records_to_add)} new historical points.")
-            else:
-                logging.info("Backfill: No new historical points to store.")
+                    if history_records_to_add:
+                        db.session.bulk_save_objects(history_records_to_add)
+                        db.session.commit()
+                        logging.info(f"Backfill: Successfully stored {len(history_records_to_add)} historical points for event {event_id}.")
+                    else:
+                        logging.info(f"Backfill: No new historical points to store for event {event_id}.")
+
+                    logging.info(f"Backfill: Finished processing event {event_id}. Waiting 10 seconds...")
+                    time.sleep(10)
+
+                except Exception as e:
+                    logging.error(f"An error occurred while backfilling event {event_id}: {e}", exc_info=True)
+                    db.session.rollback()
+                    time.sleep(10) # Wait before trying the next one
 
         except Exception as e:
-            logging.error(f"An error occurred in backfill_previous_hour_data: {e}", exc_info=True)
+            logging.error(f"An error occurred in backfill_all_events_history: {e}", exc_info=True)
             db.session.rollback()
-# --- End of Backfill Task ---
 
 def init_scheduler(app):
     """Initializes and starts the scheduler with aligned job start times."""
@@ -394,6 +444,6 @@ def init_scheduler(app):
     with app.app_context():
         logging.info("Running startup jobs synchronously...")
         discover_new_events(app)
-        backfill_previous_hour_data(app) # New backfill task
+        backfill_all_events_history(app) # New backfill task
         update_t10_achievements(app)
         logging.info("Startup jobs finished.")

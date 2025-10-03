@@ -103,7 +103,7 @@
                       活动 #{{ degree.event_id }}
                     </p>
                     <p class="text-xs text-gray-600">
-                      T<span class="font-medium">{{ degree.rank }}</span>
+                      <span class="font-medium">{{ degree.rank }}</span> 位
                     </p>
                   </router-link>
                   <div class="transform scale-75 h-10">
