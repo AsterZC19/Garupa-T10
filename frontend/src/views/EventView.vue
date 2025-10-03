@@ -130,7 +130,8 @@ async function loadEventData(eid, hour, force = false) {
 
 async function forceRefresh() {
   if (selectedEventId.value && !isRefreshing.value) {
-    await loadEventData(selectedEventId.value, selectedHour.value, true);
+    // Set force to false to just re-fetch from local backend, not upstream API
+    await loadEventData(selectedEventId.value, selectedHour.value, false);
   }
 }
 
