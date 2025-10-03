@@ -423,8 +423,8 @@ def backfill_all_events_history(app):
 def init_scheduler(app):
     """Initializes and starts the scheduler with aligned job start times."""
     executors = {
-        'default': ThreadPoolExecutor(2),  # Pool for heavy, long-running jobs
-        'priority': ThreadPoolExecutor(2) # Dedicated pool for time-sensitive jobs
+        'default': ThreadPoolExecutor(1),  # Pool for heavy, long-running jobs
+        'priority': ThreadPoolExecutor(3) # Dedicated pool for time-sensitive jobs
     }
     scheduler = BackgroundScheduler(executors=executors, daemon=True)
     
@@ -434,10 +434,10 @@ def init_scheduler(app):
     next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
 
     # Assign heavy jobs to the 'default' executor
-    scheduler.add_job(discover_new_events, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='default')
+    scheduler.add_job(discover_new_events, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='default', max_instances=1)
     
     # Assign heavy jobs to the 'default' executor
-    scheduler.add_job(update_t10_achievements, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='default')
+    scheduler.add_job(update_t10_achievements, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='default', max_instances=1)
     
     # Assign the time-sensitive job to the 'priority' executor
     scheduler.add_job(record_top_10_scores, 'interval', args=[app], minutes=1, start_date=next_minute, misfire_grace_time=60, executor='priority', max_instances=1)
