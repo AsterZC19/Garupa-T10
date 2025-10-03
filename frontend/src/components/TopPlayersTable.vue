@@ -7,9 +7,11 @@
           <th class="p-2 border whitespace-nowrap">UID</th>
           <th class="p-2 border whitespace-nowrap">名字</th>
           <th class="p-2 border whitespace-nowrap">当前PT</th>
-          <th class="p-2 border whitespace-nowrap">分差</th>
+          <th class="p-2 border whitespace-nowrap">当前分差</th>
           <th class="p-2 border whitespace-nowrap">上一整点时速</th>
           <th class="p-2 border whitespace-nowrap">时速排名</th>
+          <th class="p-2 border whitespace-nowrap">周回次数</th>
+          <th class="p-2 border whitespace-nowrap">平均PT</th>
           <th class="p-2 border whitespace-nowrap">签名</th>
           <th class="p-2 border whitespace-nowrap">当前更新时间</th>
         </tr>
@@ -38,10 +40,16 @@
                 : '-' }}
           </td>
           <td class="p-2 border text-center whitespace-nowrap">
-            {{ typeof p.speed_last_hour === 'number' ? p.speed_last_hour.toLocaleString() : p.speed_last_hour }}
+            {{ typeof p.hourly_speed === 'number' ? p.hourly_speed.toLocaleString() : p.hourly_speed }}
           </td>
           <td class="p-2 border text-center whitespace-nowrap">
-            {{ p.speed_rank }}
+            {{ p.hourly_speed > 0 ? p.speed_rank : '-' }}
+          </td>
+          <td class="p-2 border text-center whitespace-nowrap">
+            {{ p.run_count }}
+          </td>
+          <td class="p-2 border text-center whitespace-nowrap">
+            {{ p.average_pt }}
           </td>
           <td class="p-2 border whitespace-nowrap">
             {{ p.signature }}

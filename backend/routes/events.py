@@ -3,10 +3,20 @@ from flask import Blueprint, jsonify, request, current_app
 from datetime import datetime
 import time # Added for cooldown
 from models import db
-from models import Event, Score, ChartPoint
+from models import Event, Score, ChartPoint, PlayerScoreHistory
 from services.fetcher import parse_and_store_event_data
+from collections import defaultdict
 
 events_bp = Blueprint('events', __name__)
+
+# Helper functions for statistics
+def find_closest_point(scores, target_ts):
+    if not scores: return None
+    return min(scores, key=lambda s: abs(s.timestamp - target_ts))
+
+def find_last_point_before(scores, target_ts):
+    relevant_scores = [s for s in scores if s.timestamp < target_ts]
+    return relevant_scores[-1] if relevant_scores else None
 
 # In-memory store for last refresh timestamps (event_id -> timestamp)
 _last_refresh_time = {}
@@ -126,35 +136,36 @@ def get_scores(event_id):
 def get_chart(event_id):
     event = Event.query.filter_by(event_id=event_id).first()
     if not event:
-        parse_and_store_event_data(event_id)
-        event = Event.query.filter_by(event_id=event_id).first()
-        if not event:
-            return jsonify({'error': 'event not found'}), 404
+        return jsonify({'error': 'event not found'}), 404
 
-    pts = ChartPoint.query.filter(
-        ChartPoint.event_id == event_id,
-        ChartPoint.timestamp >= event.start_at,
-        ChartPoint.timestamp <= event.end_at
-    ).order_by(ChartPoint.timestamp.asc()).all()
+    # Get the UIDs and names of the current top 10 players from the Score table
+    top_10_scores = Score.query.filter_by(event_id=event_id).order_by(Score.pt.desc()).limit(10).all()
+    top_10_uids = [s.uid for s in top_10_scores]
+    name_map = {s.uid: s.name for s in top_10_scores}
+
+    # Fetch all history for these top 10 UIDs from the high-resolution table
+    pts = PlayerScoreHistory.query.filter(
+        PlayerScoreHistory.event_id == event_id,
+        PlayerScoreHistory.uid.in_(top_10_uids)
+    ).order_by(PlayerScoreHistory.timestamp.asc()).all()
     
-    # Group points by user first
-    user_points_raw = {}
+    # Group points by user
+    user_points_raw = defaultdict(list)
     for p in pts:
-        if p.uid not in user_points_raw:
-            user_points_raw[p.uid] = {'name': p.name or p.uid, 'points': []}
-        user_points_raw[p.uid]['points'].append(p)
+        user_points_raw[p.uid].append(p)
 
-    # Down-sample for each user
     series = {}
-    for uid, data in user_points_raw.items():
+    # Down-sample for each user to 15-minute intervals
+    for uid, points_list in user_points_raw.items():
         bucketed_points = {}
         # 15 minutes = 900,000 milliseconds
-        for p in data['points']:
+        for p in points_list:
             bucket_key = p.timestamp // 900000
+            # Keep the last point in each 15-min bucket
             bucketed_points[bucket_key] = {'t': p.timestamp, 'pt': p.pt}
         
         sampled_points = sorted(bucketed_points.values(), key=lambda x: x['t'])
-        series[uid] = {'name': data['name'], 'points': sampled_points}
+        series[uid] = {'name': name_map.get(uid, uid), 'points': sampled_points}
 
     return jsonify(series)
 
@@ -162,6 +173,7 @@ def get_chart(event_id):
 def get_top_players(event_id):
     event = Event.query.filter_by(event_id=event_id).first()
     if not event:
+        # Try to fetch it if it doesn't exist
         parse_and_store_event_data(event_id)
         event = Event.query.filter_by(event_id=event_id).first()
         if not event:
@@ -169,63 +181,88 @@ def get_top_players(event_id):
 
     limit = int(request.args.get('limit', 10))
 
-    # Determine the anchor time for the hourly speed calculation
-    now_ms = int(datetime.utcnow().timestamp() * 1000)
-    anchor_ts = now_ms
-    # If the event has ended, use the event's end time as the anchor
-    if now_ms > event.end_at:
-        anchor_ts = event.end_at
-
-    # Default to the last completed hour based on the anchor time
+    # Determine the anchor time for the hourly calculation
+    now_ms = int(datetime.now().timestamp() * 1000)
+    anchor_ts = now_ms if now_ms < event.end_at else event.end_at
+    
+    # Last completed hour
     end_ts = (anchor_ts // 3600000) * 3600000
     start_ts = end_ts - 3600000
 
-    # Fetch top players
-    scores_to_process = Score.query.filter_by(event_id=event_id).order_by(Score.pt.desc()).limit(100).all()
-    
-    latest_updated_at = db.session.query(db.func.max(Score.updated_at)).filter_by(event_id=event_id).scalar()
+    # Handle new events: if the event started after the beginning of our calculation window, it's too new.
+    is_new_event = (event.start_at > start_ts)
+
+    # Get top players from the main Score table (snapshot)
+    top_scores = Score.query.filter_by(event_id=event_id).order_by(Score.pt.desc()).limit(limit).all()
+    if not top_scores:
+        return jsonify([])
+
+    # Get all historical data for these top players in one query
+    top_player_uids = [s.uid for s in top_scores]
+    history_records = PlayerScoreHistory.query.filter(
+        PlayerScoreHistory.event_id == event_id,
+        PlayerScoreHistory.uid.in_(top_player_uids)
+    ).order_by(PlayerScoreHistory.timestamp.asc()).all()
+
+    # Group history by uid for easier processing
+    scores_by_uid = defaultdict(list)
+    for record in history_records:
+        scores_by_uid[record.uid].append(record)
 
     player_data = []
-    for i, s in enumerate(scores_to_process):
-        # Find points around the hour block
-        p_start = ChartPoint.query.filter(
-            ChartPoint.event_id == event_id,
-            ChartPoint.uid == s.uid,
-            ChartPoint.timestamp <= start_ts,
-            ChartPoint.timestamp >= event.start_at
-        ).order_by(ChartPoint.timestamp.desc()).first()
-
-        p_end = ChartPoint.query.filter(
-            ChartPoint.event_id == event_id,
-            ChartPoint.uid == s.uid,
-            ChartPoint.timestamp <= end_ts,
-            ChartPoint.timestamp >= event.start_at
-        ).order_by(ChartPoint.timestamp.desc()).first()
+    for i, s in enumerate(top_scores):
+        player_history = scores_by_uid[s.uid]
         
-        speed = 0
-        if p_start and p_end and p_end.timestamp > p_start.timestamp:
-            time_diff_h = (p_end.timestamp - p_start.timestamp) / 3600000
-            if time_diff_h > 0:
-                speed = round((p_end.pt - p_start.pt) / time_diff_h)
+        hourly_speed = 0
+        run_count = 0
+        average_pt = 0
 
+        if player_history and not is_new_event:
+            # 1. Calculate Hourly Speed
+            start_point = find_closest_point(player_history, start_ts)
+            end_point = find_closest_point(player_history, end_ts)
+            
+            if start_point and end_point and start_point.timestamp < end_point.timestamp:
+                time_diff_h = (end_point.timestamp - start_point.timestamp) / 3600000
+                if time_diff_h > 0:
+                    speed = (end_point.pt - start_point.pt) / time_diff_h
+                    hourly_speed = round(speed) if speed > 0 else 0
+
+            # 2. Calculate Run Count for the last hour
+            scores_in_hour = [rec for rec in player_history if start_ts <= rec.timestamp < end_ts]
+            if scores_in_hour:
+                last_score_before_hour = find_last_point_before(player_history, start_ts)
+                last_pt = last_score_before_hour.pt if last_score_before_hour else scores_in_hour[0].pt
+                
+                for rec in scores_in_hour:
+                    if rec.pt > last_pt:
+                        run_count += 1
+                    last_pt = rec.pt
+
+            # 3. Calculate Average PT
+            if run_count > 0:
+                average_pt = hourly_speed // run_count
+        
+        # Compile player data
         player_data.append({
             'uid': s.uid,
             'name': s.name,
             'pt': s.pt,
             'rank': i + 1,
             'signature': s.signature,
-            'speed_data_timestamp': end_ts, # Renamed from updated_at
-            'score_updated_at': s.updated_at, # Added for the new column
-            'speed_last_hour': speed,
-            'speed_rank': 0 
+            'score_updated_at': s.updated_at,
+            'hourly_speed': hourly_speed,
+            'run_count': run_count if run_count > 0 else '-',
+            'average_pt': average_pt if run_count > 0 else '-',
+            'speed_rank': 0 # Placeholder, will be calculated next
         })
 
     # Calculate speed rank
-    player_data.sort(key=lambda p: p['speed_last_hour'], reverse=True)
+    player_data.sort(key=lambda p: p['hourly_speed'], reverse=True)
     for i, player in enumerate(player_data):
         player['speed_rank'] = i + 1
         
-    # Sort back by original rank (which is now based on PT)
+    # Sort back by original PT rank
     player_data.sort(key=lambda p: p['rank'])
     
-    return jsonify(player_data[:limit])
+    return jsonify(player_data)

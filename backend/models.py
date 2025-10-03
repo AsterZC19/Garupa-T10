@@ -55,3 +55,11 @@ class PlayerDegree(db.Model):
     event_id = db.Column(db.String, index=True)
     rank = db.Column(db.Integer)
     degree_id = db.Column(db.Integer)
+
+class PlayerScoreHistory(db.Model):
+    __tablename__ = 'player_score_history'
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.String, db.ForeignKey('events.event_id'), index=True)
+    uid = db.Column(db.String, index=True)
+    pt = db.Column(db.Integer)
+    timestamp = db.Column(db.Integer, index=True) # ms

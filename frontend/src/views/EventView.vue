@@ -1,12 +1,12 @@
 <template>
   <div class="p-4 sm:p-6 max-w-full sm:max-w-xl md:max-w-3xl lg:max-w-6xl mx-auto">
-    <header class="flex flex-col sm:flex-row items-center sm:justify-between mb-4 gap-4">
-      <div class="flex items-center gap-2 w-full sm:w-auto">
-        <EventSelector :events="events" v-model="selectedEventId" />
+    <header class="flex items-center justify-between mb-4 gap-2">
+      <div class="flex-1 min-w-0">
+        <EventSelector :events="events" v-model="selectedEventId" class="w-full" />
       </div>
-      <button @click="forceRefresh" :disabled="isRefreshing" class="px-3 py-1 border rounded bg-gray-100 hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed w-full sm:w-auto">
-        <span class="hidden sm:inline">{{ isRefreshing ? '刷新中...' : '刷新' }}</span>
+      <button @click="forceRefresh" :disabled="isRefreshing" class="flex-shrink-0 px-3 py-1 border rounded bg-gray-100 hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed">
         <span class="sm:hidden">{{ isRefreshing ? '刷新中...' : '刷新' }}</span>
+        <span class="hidden sm:inline">{{ isRefreshing ? '刷新中...' : '刷新' }}</span>
       </button>
     </header>
 
