@@ -48,7 +48,7 @@
       <!-- 页脚 -->
       <footer class="mt-10 text-center text-xs text-gray-400">
         由
-        <span class="text-pink-400">❤</span>
+        <span class="text-cyan-400">🎵</span>
         构建 /
         <a href="https://github.com/AsterZC19/Garupa-T10" target="_blank" rel="noopener" class="underline hover:text-blue-500">
           GitHub
