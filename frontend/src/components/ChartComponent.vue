@@ -3,6 +3,7 @@
     <div class="flex justify-end gap-2 mb-2">
       <button @click="hideAll" class="px-2 py-1 text-xs border rounded bg-gray-100 hover:bg-gray-200">隐藏所有</button>
       <button @click="showAll" class="px-2 py-1 text-xs border rounded bg-gray-100 hover:bg-gray-200">显示所有</button>
+      <button @click="resetZoom" class="px-2 py-1 text-xs border rounded bg-gray-100 hover:bg-gray-200">重置缩放</button>
     </div>
     <canvas ref="canvasRef" class="w-full h-full block"></canvas>
   </div>
@@ -13,7 +14,8 @@ import { onMounted, onBeforeUnmount, watch, ref } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import 'chartjs-adapter-date-fns';
 import { zhCN } from 'date-fns/locale';
-Chart.register(...registerables)
+import zoomPlugin from 'chartjs-plugin-zoom';
+Chart.register(...registerables, zoomPlugin);
 
 const props = defineProps({
   series: Object,
@@ -35,6 +37,11 @@ function showAll() {
   chart.data.datasets.forEach((_, i) => {
     chart.show(i);
   });
+}
+
+function resetZoom() {
+  if (!chart) return;
+  chart.resetZoom();
 }
 
 const colorPalette = [
@@ -101,6 +108,35 @@ const draw = () => {
             boxWidth: 12,
             font: { size: 12 } // 调小字体
           }
+        },
+        zoom: {
+          limits: {
+            x: {
+              min: props.currentEvent.start_at,
+              max: props.currentEvent.end_at,
+            },
+            y: {
+              min: 0,
+              // max is set dynamically below
+            }
+          },
+          pan: {
+            enabled: true,
+            mode: 'xy',
+          },
+          zoom: {
+            wheel: {
+              enabled: true,
+            },
+            drag: {
+              enabled: true,
+              modifierKey: 'shift',
+            },
+            pinch: {
+              enabled: true
+            },
+            mode: 'xy',
+          }
         }
       },
       scales: {
@@ -126,7 +162,12 @@ const draw = () => {
         }
       }
     }
-  })
+  });
+
+  const calculatedMaxY = chart.scales.y.max;
+  chart.options.scales.y.max = calculatedMaxY;
+  chart.options.plugins.zoom.limits.y.max = calculatedMaxY;
+  chart.update();
 }
 
 onMounted(draw)
