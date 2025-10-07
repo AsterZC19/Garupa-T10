@@ -3,9 +3,21 @@
     <div class="flex justify-end gap-2 mb-2">
       <button @click="hideAll" class="px-2 py-1 text-xs border rounded bg-gray-100 hover:bg-gray-200">隐藏所有</button>
       <button @click="showAll" class="px-2 py-1 text-xs border rounded bg-gray-100 hover:bg-gray-200">显示所有</button>
-      <button @click="resetZoom" class="px-2 py-1 text-xs border rounded bg-gray-100 hover:bg-gray-200">重置缩放</button>
     </div>
     <canvas ref="canvasRef" class="w-full h-full block"></canvas>
+    <div ref="controlsRef" class="absolute flex items-start gap-2" style="left: -9999px; top: 0;">
+      <div class="flex flex-col gap-1">
+        <button @click="zoomIn" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm">+</button>
+        <button @click="zoomOut" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm">-</button>
+        <button @click="resetZoom" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm">↺</button>
+      </div>
+      <div class="grid grid-cols-3 gap-1">
+        <button @click="panChart(0, 50)" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm col-start-2">↑</button>
+        <button @click="panChart(50, 0)" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm col-start-1 row-start-2">←</button>
+        <button @click="panChart(-50, 0)" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm col-start-3 row-start-2">→</button>
+        <button @click="panChart(0, -50)" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm col-start-2 row-start-3">↓</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -23,6 +35,7 @@ const props = defineProps({
 })
 
 const canvasRef = ref(null)
+const controlsRef = ref(null)
 let chart = null
 
 function hideAll() {
@@ -42,6 +55,21 @@ function showAll() {
 function resetZoom() {
   if (!chart) return;
   chart.resetZoom();
+}
+
+function zoomIn() {
+  if (!chart) return;
+  chart.zoom(1.1);
+}
+
+function zoomOut() {
+  if (!chart) return;
+  chart.zoom(0.9);
+}
+
+function panChart(x, y) {
+  if (!chart) return;
+  chart.pan({ x, y }, undefined, 'default');
 }
 
 const colorPalette = [
@@ -67,30 +95,6 @@ const colorPalette = [
   '#BA55D3'  // Medium Orchid
 ];
 
-const isTouchDevice = () => {
-  let hasTouchScreen = false;
-  if ("maxTouchPoints" in navigator) {
-    hasTouchScreen = navigator.maxTouchPoints > 0;
-  } else if ("msMaxTouchPoints" in navigator) {
-    hasTouchScreen = navigator.msMaxTouchPoints > 0;
-  } else {
-    const mQ = window.matchMedia && matchMedia("(pointer:coarse)");
-    if (mQ && mQ.media === "(pointer:coarse)") {
-      hasTouchScreen = !!mQ.matches;
-    } else if ('orientation' in window) {
-      hasTouchScreen = true; // deprecated, but good fallback
-    } else {
-      // Only as a last resort, fall back to user agent sniffing
-      var UA = navigator.userAgent;
-      hasTouchScreen = (
-        /\b(BlackBerry|webOS|iPhone|IEMobile)\b/i.test(UA) ||
-        /\b(Android|Windows Phone|iPad|iPod)\b/i.test(UA)
-      );
-    }
-  }
-  return hasTouchScreen;
-};
-
 const draw = () => {
   if (!canvasRef.value || !props.currentEvent) return
   if (chart) {
@@ -111,8 +115,6 @@ const draw = () => {
       backgroundColor: color + '33' // Add some transparency to the fill/point color
     }
   }) : []
-
-  const touchDevice = isTouchDevice();
 
   chart = new Chart(canvasRef.value.getContext('2d'), {
     type: 'line',
@@ -147,19 +149,18 @@ const draw = () => {
             }
           },
           pan: {
-            enabled: !touchDevice,
+            enabled: false,
             mode: 'xy',
           },
           zoom: {
             wheel: {
-              enabled: true,
+              enabled: false,
             },
             drag: {
-              enabled: !touchDevice,
-              modifierKey: 'shift',
+              enabled: false,
             },
             pinch: {
-              enabled: touchDevice,
+              enabled: false,
             },
             mode: 'xy',
           }
@@ -194,6 +195,12 @@ const draw = () => {
   chart.options.scales.y.max = calculatedMaxY;
   chart.options.plugins.zoom.limits.y.max = calculatedMaxY;
   chart.update();
+
+  // Position controls inside the chart area
+  if (controlsRef.value && chart.chartArea) {
+    controlsRef.value.style.left = `${chart.chartArea.left + 0}px`;
+    controlsRef.value.style.top = `${chart.chartArea.top + 40}px`;
+  }
 }
 
 onMounted(draw)
