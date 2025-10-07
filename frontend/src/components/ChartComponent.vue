@@ -67,6 +67,23 @@ const colorPalette = [
   '#BA55D3'  // Medium Orchid
 ];
 
+const isTouchInLegend = (chart, event) => {
+  if (event.native && event.native.touches && event.native.touches.length > 0) {
+    const legend = chart.legend;
+    if (!legend.options.display) {
+      return false;
+    }
+    const touch = event.native.touches[0];
+    const canvasRect = chart.canvas.getBoundingClientRect();
+    const touchYinCanvas = touch.clientY - canvasRect.top;
+    const touchXinCanvas = touch.clientX - canvasRect.left;
+
+    return touchYinCanvas >= legend.top && touchYinCanvas <= legend.bottom &&
+           touchXinCanvas >= legend.left && touchXinCanvas <= legend.right;
+  }
+  return false;
+};
+
 const draw = () => {
   if (!canvasRef.value || !props.currentEvent) return
   if (chart) {
