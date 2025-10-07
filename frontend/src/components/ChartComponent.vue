@@ -67,21 +67,28 @@ const colorPalette = [
   '#BA55D3'  // Medium Orchid
 ];
 
-const isTouchInLegend = (chart, event) => {
-  if (event.native && event.native.touches && event.native.touches.length > 0) {
-    const legend = chart.legend;
-    if (!legend.options.display) {
-      return false;
+const isTouchDevice = () => {
+  let hasTouchScreen = false;
+  if ("maxTouchPoints" in navigator) {
+    hasTouchScreen = navigator.maxTouchPoints > 0;
+  } else if ("msMaxTouchPoints" in navigator) {
+    hasTouchScreen = navigator.msMaxTouchPoints > 0;
+  } else {
+    const mQ = window.matchMedia && matchMedia("(pointer:coarse)");
+    if (mQ && mQ.media === "(pointer:coarse)") {
+      hasTouchScreen = !!mQ.matches;
+    } else if ('orientation' in window) {
+      hasTouchScreen = true; // deprecated, but good fallback
+    } else {
+      // Only as a last resort, fall back to user agent sniffing
+      var UA = navigator.userAgent;
+      hasTouchScreen = (
+        /\b(BlackBerry|webOS|iPhone|IEMobile)\b/i.test(UA) ||
+        /\b(Android|Windows Phone|iPad|iPod)\b/i.test(UA)
+      );
     }
-    const touch = event.native.touches[0];
-    const canvasRect = chart.canvas.getBoundingClientRect();
-    const touchYinCanvas = touch.clientY - canvasRect.top;
-    const touchXinCanvas = touch.clientX - canvasRect.left;
-
-    return touchYinCanvas >= legend.top && touchYinCanvas <= legend.bottom &&
-           touchXinCanvas >= legend.left && touchXinCanvas <= legend.right;
   }
-  return false;
+  return hasTouchScreen;
 };
 
 const draw = () => {
@@ -104,6 +111,8 @@ const draw = () => {
       backgroundColor: color + '33' // Add some transparency to the fill/point color
     }
   }) : []
+
+  const touchDevice = isTouchDevice();
 
   chart = new Chart(canvasRef.value.getContext('2d'), {
     type: 'line',
@@ -138,7 +147,7 @@ const draw = () => {
             }
           },
           pan: {
-            enabled: true,
+            enabled: !touchDevice,
             mode: 'xy',
           },
           zoom: {
@@ -146,11 +155,11 @@ const draw = () => {
               enabled: true,
             },
             drag: {
-              enabled: true,
+              enabled: !touchDevice,
               modifierKey: 'shift',
             },
             pinch: {
-              enabled: true
+              enabled: touchDevice,
             },
             mode: 'xy',
           }
