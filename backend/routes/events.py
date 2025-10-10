@@ -6,6 +6,8 @@ from models import db
 from models import Event, Score, ChartPoint, PlayerScoreHistory
 from services.fetcher import parse_and_store_event_data
 from collections import defaultdict
+from sqlalchemy import Integer
+from sqlalchemy.sql.expression import cast
 
 events_bp = Blueprint('events', __name__)
 
@@ -106,7 +108,8 @@ def current_or_last():
         e = current
         is_current = True
     else:
-        e = Event.query.filter(Event.end_at < now_ms).order_by(Event.end_at.desc()).first()
+        # Fallback to the event with the highest event_id
+        e = Event.query.order_by(cast(Event.event_id, Integer).desc()).first()
         is_current = False
     if not e:
         return jsonify({'error': 'no event'}), 404
