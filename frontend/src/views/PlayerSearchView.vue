@@ -200,13 +200,13 @@
         rel="noopener"
         class="underline hover:text-blue-500"
       >GitHub</a>
-      / CDN by
+      <!-- / CDN by
       <a
         href="https://cdn.sharon.io/aff.php?aff=101"
         target="_blank"
         rel="noopener"
         class="underline hover:text-blue-500"
-      >Sharon CDN</a>
+      >Sharon CDN</a> -->
     </footer>
   </div>
 </template>

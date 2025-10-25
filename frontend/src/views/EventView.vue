@@ -4,9 +4,8 @@
       <div class="flex-1 min-w-0">
         <EventSelector :events="events" v-model="selectedEventId" class="w-full" />
       </div>
-      <button @click="forceRefresh" :disabled="isRefreshing" class="flex-shrink-0 px-3 py-1 border rounded bg-gray-100 hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed">
-        <span class="sm:hidden">{{ isRefreshing ? '刷新中...' : '刷新' }}</span>
-        <span class="hidden sm:inline">{{ isRefreshing ? '刷新中...' : '刷新' }}</span>
+      <button @click="forceRefresh" :disabled="isRefreshing" class="flex-shrink-0 px-3 py-1 border rounded bg-gray-100 hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed w-28 text-center">
+        <span>{{ refreshButtonText }}</span>
       </button>
     </header>
 
@@ -53,10 +52,10 @@
         <a href="https://github.com/AsterZC19/Garupa-T10" target="_blank" rel="noopener" class="underline hover:text-blue-500">
           GitHub
         </a>
-        / CDN by
+        <!-- / CDN by
         <a href="https://cdn.sharon.io/aff.php?aff=101" target="_blank" rel="noopener" class="underline hover:text-blue-500">
           Sharon CDN
-        </a>
+        </a> -->
       </footer>
     </main>
   </div>
@@ -67,7 +66,7 @@ import api from '../api'
 import EventSelector from '../components/EventSelector.vue'
 import TopPlayersTable from '../components/TopPlayersTable.vue'
 import ChartComponent from '../components/ChartComponent.vue'
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { formatTs } from '../utils.js'
 
@@ -86,6 +85,16 @@ const chartSeries = ref({})
 const eventName = computed(() => currentEvent.value ? currentEvent.value.name : '加载中...')
 
 const isRefreshing = ref(false)
+const refreshInterval = ref(null)
+const REFRESH_INTERVAL_SECONDS = 2 * 60; // 2 minutes
+const countdown = ref(REFRESH_INTERVAL_SECONDS);
+
+const refreshButtonText = computed(() => {
+  if (isRefreshing.value) {
+    return '刷新中...';
+  }
+  return `刷新 (${countdown.value}s)`;
+});
 
 async function loadChartData(eid, interval) {
   if (!eid) return
@@ -134,6 +143,7 @@ async function loadEventData(eid, hour, force = false) {
     topPlayers.value = []
   } finally {
     isRefreshing.value = false
+    countdown.value = REFRESH_INTERVAL_SECONDS;
   }
 }
 
@@ -185,6 +195,24 @@ onMounted(async () => {
         router.replace({ name: 'Event', params: { eventId: eventList[0].event_id } })
       }
     }
+  }
+
+  // Set up auto-refresh
+  countdown.value = REFRESH_INTERVAL_SECONDS;
+  refreshInterval.value = setInterval(() => {
+    if (isRefreshing.value) return;
+
+    if (countdown.value > 0) {
+      countdown.value--;
+    } else {
+      forceRefresh();
+    }
+  }, 1000);
+})
+
+onUnmounted(() => {
+  if (refreshInterval.value) {
+    clearInterval(refreshInterval.value);
   }
 })
 
