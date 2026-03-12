@@ -21,10 +21,10 @@
         v-else-if="playerData && playerData.profile"
         class="bg-white shadow-xl rounded-lg overflow-hidden w-full md:max-w-[70vw] mx-auto"
       >
-        <div class="lg:flex">
+        <div class="md:flex">
 
           <!-- 左列：头像、基础信息、称号、自我介绍 -->
-          <div class="lg:w-1/2 p-4 sm:p-6 space-y-4">
+          <div class="md:w-1/2 p-4 sm:p-6 space-y-4">
 
             <!-- 头像 -->
             <div v-if="leaderCardIllustUrl" class="relative">
@@ -52,7 +52,7 @@
               v-if="playerData.profile.userProfileDegreeMap && playerData.profile.userProfileDegreeMap.entries && allDegreesData"
               class="pb-1 overflow-hidden w-full"
             >
-              <div class="flex flex-nowrap justify-center items-center space-x-1 sm:space-x-2 scale-[0.55] sm:scale-75 origin-center w-full">
+              <div class="flex flex-nowrap justify-center items-center -space-x-4 sm:-space-x-2 scale-[0.55] sm:scale-75 origin-center w-full">
                 <div
                   v-for="degree in playerData.profile.userProfileDegreeMap.entries"
                   :key="degree.degreeId"
@@ -65,16 +65,16 @@
               </div>
             </div>
 
-            <!-- 自使介绍 -->
+            <!-- 签名 -->
             <div class="text-center px-4 py-2 bg-gray-50 rounded-lg italic border border-gray-100">
               <p class="text-sm text-gray-600">
-                "{{ playerData.profile.introduction || '' }}"
+                {{ playerData.profile.introduction || '' }}
               </p>
             </div>
           </div>
 
           <!-- 右列：T10 记录、主乐队、综合力、乐队等级、角色等级 -->
-          <div class="lg:w-1/2 p-4 sm:p-6 space-y-6 border-t lg:border-t-0 lg:border-l">
+          <div class="md:w-1/2 p-4 sm:p-6 space-y-6 border-t md:border-t-0 md:border-l">
 
             <!-- T10 记录 -->
             <div class="pt-2 border-b pb-6">
@@ -104,11 +104,11 @@
             </div>
 
             <!-- 主乐队 -->
-            <div v-if="sortedCards" class="pb-4 overflow-hidden w-full">
+            <div v-if="sortedCards" class="pb-2 overflow-hidden w-full">
               <h3 class="text-lg font-bold text-gray-800 mb-4 text-center">主乐队</h3>
               <div class="flex flex-nowrap justify-center items-center gap-1 sm:gap-2 scale-[0.85] sm:scale-100 origin-center w-full">
                 <div
-                  v-for="card in sortedCards"
+                  v-for="(card) in sortedCards"
                   :key="card.situationId"
                   class="flex-shrink-0"
                 >
@@ -128,29 +128,87 @@
               </div>
             </div>
 
-            <!-- 综合力 (Ultra Compact) - Moved below Main Band -->
-            <div v-if="playerData.bp" class="flex flex-col items-center gap-1 py-2 px-4 bg-indigo-50/50 rounded-xl border border-indigo-100 mx-auto w-fit min-w-[240px] mb-6 shadow-sm">
-              <div class="flex items-center justify-between w-full border-b border-indigo-200 pb-1 mb-1">
-                <span class="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Team Power</span>
-                <span class="text-sm font-black text-indigo-600">{{ playerData.bp.total.toLocaleString() }}</span>
-              </div>
-              <div class="flex gap-4 w-full justify-between">
-                <div class="flex items-center gap-1.5 flex-1">
-                  <div class="w-1 h-3 bg-pink-400 rounded-full"></div>
-                  <span class="text-[9px] font-bold text-gray-500">{{ Math.round(playerData.bp.performance/1000) }}k</span>
-                </div>
-                <div class="flex items-center gap-1.5 flex-1">
-                  <div class="w-1 h-3 bg-blue-400 rounded-full"></div>
-                  <span class="text-[9px] font-bold text-gray-500">{{ Math.round(playerData.bp.technique/1000) }}k</span>
-                </div>
-                <div class="flex items-center gap-1.5 flex-1">
-                  <div class="w-1 h-3 bg-orange-400 rounded-full"></div>
-                  <span class="text-[9px] font-bold text-gray-500">{{ Math.round(playerData.bp.visual/1000) }}k</span>
+            <!-- 综合力 -->
+            <div v-if="playerData.bp" class="mt-2 pb-2 overflow-hidden w-full">
+
+              <h3 class="text-base font-bold text-gray-700 mb-2 text-center">
+                综合力（TODO）
+              </h3>
+
+              <!-- 内容区（和主乐队同结构，但稍微窄一点） -->
+              <div class="flex flex-nowrap justify-center items-center scale-[0.8] sm:scale-[0.95] origin-center w-full">
+
+                <div class="w-full max-w-[420px]">
+
+                  <!-- 总数 -->
+                  <div class="flex justify-between items-end mb-2">
+                    <span class="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">
+                      TOTAL
+                    </span>
+                    <span class="text-xl font-black text-indigo-600 tabular-nums">
+                      {{ playerData.bp.total.toLocaleString() }}
+                    </span>
+                  </div>
+
+                  <!-- 三属性 -->
+                  <div class="grid grid-cols-3 gap-3">
+
+                    <!-- Performance -->
+                    <div>
+                      <div class="flex justify-between text-[10px] font-bold mb-1">
+                        <span class="text-pink-400">PERF</span>
+                        <span class="text-gray-600 tabular-nums">
+                          {{ Math.round(playerData.bp.performance).toLocaleString() }}
+                        </span>
+                      </div>
+
+                      <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          class="h-full bg-pink-400 transition-all duration-1000"
+                          :style="{ width: (playerData.bp.performance / (playerData.bp.total * 0.45) * 100) + '%' }"
+                        ></div>
+                      </div>
+                    </div>
+
+                    <!-- Technique -->
+                    <div>
+                      <div class="flex justify-between text-[10px] font-bold mb-1">
+                        <span class="text-blue-400">TECH</span>
+                        <span class="text-gray-600 tabular-nums">
+                          {{ Math.round(playerData.bp.technique).toLocaleString() }}
+                        </span>
+                      </div>
+
+                      <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          class="h-full bg-blue-400 transition-all duration-1000"
+                          :style="{ width: (playerData.bp.technique / (playerData.bp.total * 0.45) * 100) + '%' }"
+                        ></div>
+                      </div>
+                    </div>
+
+                    <!-- Visual -->
+                    <div>
+                      <div class="flex justify-between text-[10px] font-bold mb-1">
+                        <span class="text-orange-400">VIS</span>
+                        <span class="text-gray-600 tabular-nums">
+                          {{ Math.round(playerData.bp.visual).toLocaleString() }}
+                        </span>
+                      </div>
+
+                      <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          class="h-full bg-orange-400 transition-all duration-1000"
+                          :style="{ width: (playerData.bp.visual / (playerData.bp.total * 0.45) * 100) + '%' }"
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div class="border-b w-full"></div>
+            <div class="border-b w-full pt-2"></div>
 
             <!-- 乐队等级 -->
             <div v-if="playerData.profile.bandRankMap && playerData.profile.bandRankMap.entries" class="pb-6 border-b">
