@@ -130,20 +130,23 @@ def calculate_bp(profile):
         bonus_perf, bonus_tech, bonus_vis = 0, 0, 0
         
         for item_entry in enabled_area_items:
-            item_id = str(item_entry['areaItemId'])
+            # Use areaItemCategory as the key for metadata lookup, matching tsugu-bangdream-bot's logic
+            category_id = str(item_entry.get('areaItemCategory'))
             item_lv = item_entry['level']
-            item_meta = area_items_meta.get(item_id)
+            item_meta = area_items_meta.get(category_id)
             if not item_meta: continue
             
             target_attrs = item_meta.get('targetAttributes', [])
             target_bands = item_meta.get('targetBandIds', [])
             
-            # Match logic: if list is empty, it applies to all.
+            # Match logic: if target lists are empty, it's a global booster (rare but possible in some data structures)
+            # Otherwise, it must include the card's attribute/band.
             match_attr = not target_attrs or card['attribute'] in target_attrs
             match_band = not target_bands or card['band_id'] in target_bands
             
             if match_attr and match_band:
-                # percentages are stored in maps keyed by level, JP server is index 0
+                # percentages are stored in maps keyed by level string
+                # server index 0 is JP
                 p_perc = item_meta.get('performance', {}).get(str(item_lv), [0])[0]
                 t_perc = item_meta.get('technique', {}).get(str(item_lv), [0])[0]
                 v_perc = item_meta.get('visual', {}).get(str(item_lv), [0])[0]

@@ -21,110 +21,96 @@
         v-else-if="playerData && playerData.profile"
         class="bg-white shadow-xl rounded-lg overflow-hidden w-full md:max-w-[70vw] mx-auto"
       >
-        <div class="md:flex">
+        <div class="lg:flex">
 
           <!-- 左列：头像、基础信息、称号、自我介绍 -->
-          <div class="md:w-1/2 p-4 sm:p-6 space-y-6">
+          <div class="lg:w-1/2 p-4 sm:p-6 space-y-4">
 
             <!-- 头像 -->
             <div v-if="leaderCardIllustUrl" class="relative">
               <img
                 :src="leaderCardIllustUrl"
                 alt="Player Illustration"
-                class="w-full h-auto object-cover"
+                class="w-full h-auto object-cover rounded-lg shadow-sm"
               />
             </div>
 
             <!-- 基本资料 -->
-            <div class="text-center pb-6">
+            <div class="text-center">
               <h2 class="text-3xl sm:text-4xl font-bold text-gray-800">
                 {{ playerData.profile.userName || '&nbsp;' }}
               </h2>
-              <div class="flex items-center justify-center text-gray-600 mt-2">
-                <span class="text-lg">
-                  UID: {{ playerData.profile.publishUserIdFlg ? playerData.profile.userId : 'ID未公开' }}
-                </span>
+              <div class="flex items-center justify-center text-gray-500 mt-1 text-sm font-medium">
+                <span>UID: {{ playerData.profile.publishUserIdFlg ? playerData.profile.userId : 'ID未公开' }}</span>
+                <span class="mx-2 opacity-30">|</span>
+                <span>等级 {{ playerData.profile.rank }}</span>
               </div>
-              <p class="text-lg text-gray-600 mt-1">等级 {{ playerData.profile.rank }}</p>
             </div>
 
             <!-- 称号 -->
             <div
               v-if="playerData.profile.userProfileDegreeMap && playerData.profile.userProfileDegreeMap.entries && allDegreesData"
-              class="pb-4"
+              class="pb-1 overflow-hidden w-full"
             >
-              <div
-                v-if="playerData.profile.userProfileDegreeMap.entries.length === 1"
-                class="flex justify-center"
-              >
+              <div class="flex flex-nowrap justify-center items-center space-x-1 sm:space-x-2 scale-[0.55] sm:scale-75 origin-center w-full">
                 <div
                   v-for="degree in playerData.profile.userProfileDegreeMap.entries"
                   :key="degree.degreeId"
+                  class="flex-shrink-0"
                 >
-                  <div class="transform scale-75 h-10">
-                    <DegreeDisplay :degreeId="degree.degreeId" :allDegreesData="allDegreesData" />
-                  </div>
-                </div>
-              </div>
-              <div v-else class="flex flex-wrap justify-center gap-[2px]">
-                <div
-                  v-for="degree in playerData.profile.userProfileDegreeMap.entries"
-                  :key="degree.degreeId"
-                >
-                  <div class="transform scale-75 h-10">
+                  <div class="h-8 flex items-center">
                     <DegreeDisplay :degreeId="degree.degreeId" :allDegreesData="allDegreesData" />
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- 自我介绍 -->
-            <div class="text-center p-4">
-              <p class="text-lg text-gray-700 italic">
+            <!-- 自使介绍 -->
+            <div class="text-center px-4 py-2 bg-gray-50 rounded-lg italic border border-gray-100">
+              <p class="text-sm text-gray-600">
                 "{{ playerData.profile.introduction || '' }}"
               </p>
             </div>
           </div>
 
-          <!-- 右列：T10 记录、主乐队、乐队等级、角色等级 -->
-          <div class="md:w-1/2 p-4 sm:p-6 space-y-6 border-t md:border-t-0 md:border-l">
+          <!-- 右列：T10 记录、主乐队、综合力、乐队等级、角色等级 -->
+          <div class="lg:w-1/2 p-4 sm:p-6 space-y-6 border-t lg:border-t-0 lg:border-l">
 
             <!-- T10 记录 -->
-            <div class="pt-4 border-b">
-              <h3 class="text-xl font-semibold text-gray-800 mb-4 text-center">T10 记录</h3>
-              <div v-if="earnedDegrees && earnedDegrees.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div class="pt-2 border-b pb-6">
+              <h3 class="text-lg font-bold text-gray-800 mb-4 text-center">T10 记录</h3>
+              <div v-if="earnedDegrees && earnedDegrees.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div
                   v-for="degree in earnedDegrees"
                   :key="degree.event_id"
-                  class="p-2 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors duration-200 flex flex-col items-center"
+                  class="p-2 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-all duration-200 flex flex-col items-center border border-gray-100 hover:border-indigo-200"
                 >
                   <router-link :to="'/' + degree.event_id" class="text-center mb-1">
-                    <p class="font-semibold text-indigo-600 group-hover:underline text-sm">
-                      活动 #{{ degree.event_id }}
+                    <p class="font-bold text-indigo-600 text-[10px]">
+                      EVENT #{{ degree.event_id }}
                     </p>
-                    <p class="text-xs text-gray-600">
-                      <span class="font-medium">{{ degree.rank }}</span> 位
+                    <p class="text-[11px] text-gray-600 font-medium">
+                      RANK <span class="text-indigo-700 font-black">{{ degree.rank }}</span>
                     </p>
                   </router-link>
-                  <div class="transform scale-75 h-10">
+                  <div class="transform scale-[0.65] h-8 flex items-center">
                     <DegreeDisplay :rank="degree.rank" :event_id="degree.event_id" />
                   </div>
                 </div>
               </div>
               <div v-else class="text-center py-8">
-                <p class="text-gray-500">该玩家暂无 T10 记录。</p>
+                <p class="text-gray-400 text-sm">该玩家暂无 T10 记录。</p>
               </div>
             </div>
 
-            
-
             <!-- 主乐队 -->
-            <div v-if="sortedCards">
-              <h3 class="text-xl font-semibold text-gray-800 mb-4 text-center">主乐队</h3>
-              <div class="flex flex-wrap justify-center items-center gap-2">
+            <div v-if="sortedCards" class="pb-4 overflow-hidden w-full">
+              <h3 class="text-lg font-bold text-gray-800 mb-4 text-center">主乐队</h3>
+              <div class="flex flex-nowrap justify-center items-center gap-1 sm:gap-2 scale-[0.85] sm:scale-100 origin-center w-full">
                 <div
-                  v-for="(card) in sortedCards"
-                  :key="card.situationId" "
+                  v-for="card in sortedCards"
+                  :key="card.situationId"
+                  class="flex-shrink-0"
                 >
                   <CardIcon 
                     :cardId="card.situationId" 
@@ -136,70 +122,40 @@
                     :ripId="card.rip_id"
                     :skillLevel="card.skillLevel"
                     :limitBreakRank="card.limitBreakRank"
-                    :size="80"
+                    :size="65"
                   />
                 </div>
               </div>
             </div>
 
-            <!-- 综合力 -->
-            <div v-if="playerData.bp" class="bg-white border border-gray-100 shadow-sm p-6 rounded-xl mb-6">
-              <div class="flex justify-between items-end mb-6">
-                <span class="text-gray-500 font-medium text-sm">综合力合计</span>
-                <span class="text-4xl font-black text-indigo-600 tracking-tight">
-                  {{ playerData.bp.total.toLocaleString() }}
-                </span>
+            <!-- 综合力 (Ultra Compact) - Moved below Main Band -->
+            <div v-if="playerData.bp" class="flex flex-col items-center gap-1 py-2 px-4 bg-indigo-50/50 rounded-xl border border-indigo-100 mx-auto w-fit min-w-[240px] mb-6 shadow-sm">
+              <div class="flex items-center justify-between w-full border-b border-indigo-200 pb-1 mb-1">
+                <span class="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Team Power</span>
+                <span class="text-sm font-black text-indigo-600">{{ playerData.bp.total.toLocaleString() }}</span>
               </div>
-              
-              <div class="space-y-6">
-                <!-- Performance -->
-                <div>
-                  <div class="flex justify-between items-center mb-2">
-                    <span class="px-2 py-0.5 rounded bg-pink-100 text-pink-600 text-[10px] font-black uppercase">Performance</span>
-                    <span class="text-sm font-bold text-gray-700 tabular-nums">{{ Math.round(playerData.bp.performance).toLocaleString() }}</span>
-                  </div>
-                  <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      class="h-full bg-gradient-to-r from-pink-300 to-pink-500 rounded-full transition-all duration-1000 ease-out"
-                      :style="{ width: (playerData.bp.performance / (playerData.bp.total * 0.45) * 100) + '%' }"
-                    ></div>
-                  </div>
+              <div class="flex gap-4 w-full justify-between">
+                <div class="flex items-center gap-1.5 flex-1">
+                  <div class="w-1 h-3 bg-pink-400 rounded-full"></div>
+                  <span class="text-[9px] font-bold text-gray-500">{{ Math.round(playerData.bp.performance/1000) }}k</span>
                 </div>
-
-                <!-- Technique -->
-                <div>
-                  <div class="flex justify-between items-center mb-2">
-                    <span class="px-2 py-0.5 rounded bg-blue-100 text-blue-600 text-[10px] font-black uppercase">Technique</span>
-                    <span class="text-sm font-bold text-gray-700 tabular-nums">{{ Math.round(playerData.bp.technique).toLocaleString() }}</span>
-                  </div>
-                  <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      class="h-full bg-gradient-to-r from-blue-300 to-blue-500 rounded-full transition-all duration-1000 ease-out"
-                      :style="{ width: (playerData.bp.technique / (playerData.bp.total * 0.45) * 100) + '%' }"
-                    ></div>
-                  </div>
+                <div class="flex items-center gap-1.5 flex-1">
+                  <div class="w-1 h-3 bg-blue-400 rounded-full"></div>
+                  <span class="text-[9px] font-bold text-gray-500">{{ Math.round(playerData.bp.technique/1000) }}k</span>
                 </div>
-
-                <!-- Visual -->
-                <div>
-                  <div class="flex justify-between items-center mb-2">
-                    <span class="px-2 py-0.5 rounded bg-orange-100 text-orange-600 text-[10px] font-black uppercase">Visual</span>
-                    <span class="text-sm font-bold text-gray-700 tabular-nums">{{ Math.round(playerData.bp.visual).toLocaleString() }}</span>
-                  </div>
-                  <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      class="h-full bg-gradient-to-r from-orange-300 to-orange-500 rounded-full transition-all duration-1000 ease-out"
-                      :style="{ width: (playerData.bp.visual / (playerData.bp.total * 0.45) * 100) + '%' }"
-                    ></div>
-                  </div>
+                <div class="flex items-center gap-1.5 flex-1">
+                  <div class="w-1 h-3 bg-orange-400 rounded-full"></div>
+                  <span class="text-[9px] font-bold text-gray-500">{{ Math.round(playerData.bp.visual/1000) }}k</span>
                 </div>
               </div>
             </div>
 
+            <div class="border-b w-full"></div>
+
             <!-- 乐队等级 -->
-            <div v-if="playerData.profile.bandRankMap && playerData.profile.bandRankMap.entries">
-              <h3 class="text-xl font-semibold text-gray-800 my-4 text-center">乐队等级</h3>
-              <div class="flex flex-wrap justify-center gap-4">
+            <div v-if="playerData.profile.bandRankMap && playerData.profile.bandRankMap.entries" class="pb-6 border-b">
+              <h3 class="text-lg font-bold text-gray-800 mb-4 text-center">乐队等级</h3>
+              <div class="flex flex-wrap justify-center gap-x-5 gap-y-3">
                 <div
                   v-for="(rank, bandId) in playerData.profile.bandRankMap.entries"
                   :key="bandId"
@@ -208,9 +164,9 @@
                   <img
                     :src="`https://bestdori.com/res/icon/band_${bandId}.svg`"
                     :alt="`Band ${bandId}`"
-                    class="h-12 w-12 mb-1"
+                    class="h-8 w-8 mb-1"
                   />
-                  <span class="font-semibold">{{ rank }}</span>
+                  <span class="text-xs font-black text-gray-700">{{ rank }}</span>
                 </div>
               </div>
             </div>
@@ -219,21 +175,21 @@
             <div
               v-if="playerData.profile.userCharacterRankMap && playerData.profile.userCharacterRankMap.entries"
             >
-              <h3 class="text-xl font-semibold text-gray-800 my-4 text-center">角色等级</h3>
-              <div class="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-10 gap-4 text-center">
+              <h3 class="text-lg font-bold text-gray-800 mb-4 text-center">角色等级</h3>
+              <div class="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-10 gap-2 text-center">
                 <div
                   v-for="(char, charId) in playerData.profile.userCharacterRankMap.entries"
                   :key="charId"
                   class="flex flex-col items-center"
                 >
-                  <div class="h-12 w-12 rounded-full overflow-hidden border-2 border-gray-200 mb-1">
+                  <div class="h-7 w-7 rounded-full overflow-hidden border border-gray-200 mb-1 shadow-sm flex-shrink-0">
                     <img
                       :src="`https://bestdori.com/res/icon/chara_icon_${charId}.png`"
                       :alt="`Character ${charId}`"
                       class="w-full h-full object-cover"
                     />
                   </div>
-                  <span class="font-semibold">{{ char.rank }}</span>
+                  <span class="text-[9px] font-black text-gray-500 leading-none">{{ char.rank }}</span>
                 </div>
               </div>
             </div>
@@ -263,13 +219,6 @@
         rel="noopener"
         class="underline hover:text-blue-500"
       >GitHub</a>
-      <!-- / CDN by
-      <a
-        href="https://cdn.sharon.io/aff.php?aff=101"
-        target="_blank"
-        rel="noopener"
-        class="underline hover:text-blue-500"
-      >Sharon CDN</a> -->
     </footer>
   </div>
 </template>
@@ -286,9 +235,8 @@ const allDegreesData = ref(null);
 
 onMounted(async () => {
   try {
-    const response = await fetch('/api/degrees/all.3.json'); // Changed URL
+    const response = await fetch('/api/degrees/all.3.json');
     allDegreesData.value = await response.json();
-    console.log('Fetched allDegreesData:', allDegreesData.value);
   } catch (error) {
     console.error('Failed to fetch degrees data:', error);
   }
@@ -297,16 +245,11 @@ onMounted(async () => {
 const route = useRoute();
 const router = useRouter();
 
-// Ref for the input box, used with v-model
 const inputUid = ref(''); 
-
-// Ref for the UID that has been searched
 const searchedUid = ref(''); 
-
 const playerData = ref(null);
 const isLoading = ref(false);
 const earnedDegrees = ref([]);
-
 const leaderCardIllustUrl = ref(null);
 
 watch(playerData, async (newPlayerData) => {
@@ -319,14 +262,13 @@ watch(playerData, async (newPlayerData) => {
   let cardId = null;
   let isTrained = false;
 
-  // Priority 1: Use userProfileSituation if it exists
   if (profile.userProfileSituation) {
     cardId = profile.userProfileSituation.situationId;
     isTrained = profile.userProfileSituation.illust === 'after_training';
-  } else if (profile.userIllust) { // Priority 2: Use userIllust if it exists
+  } else if (profile.userIllust) {
     cardId = profile.userIllust.cardId;
     isTrained = !!profile.userIllust.trainingStatus;
-  } else { // Fallback: Use the leader of the main deck
+  } else {
     const leaderId = profile.mainUserDeck?.leader;
     if (leaderId) {
       const leaderCard = profile.mainDeckUserSituations?.entries.find(s => s.situationId === leaderId);
@@ -343,17 +285,12 @@ watch(playerData, async (newPlayerData) => {
       const cardDetails = res.data;
       if (cardDetails && cardDetails.resourceSetName) {
         const trainingString = isTrained ? '_after_training' : '_normal';
-        // Correct URL structure based on previous context
-        // https://bestdori.com/assets/jp/characters/resourceset/res004075_rip/trim_after_training.png
         leaderCardIllustUrl.value = `https://bestdori.com/assets/jp/characters/resourceset/${cardDetails.resourceSetName}_rip/trim${trainingString}.png`;
       } else {
-        // Fallback to old URL structure if API fails or resourceSetName is missing
         const trainingString = isTrained ? '_after_training' : '_normal';
         leaderCardIllustUrl.value = `https://bestdori.com/res/card/${cardId}_rip/trim${trainingString}.png`;
       }
     } catch (error) {
-      console.error('Failed to get card details for illustration:', error);
-      // Fallback to old URL structure on error
       const trainingString = isTrained ? '_after_training' : '_normal';
       leaderCardIllustUrl.value = `https://bestdori.com/res/card/${cardId}_rip/trim${trainingString}.png`;
     }
@@ -377,11 +314,8 @@ const fetchPlayerData = async (playerUid) => {
   try {
     const res = await api.get(`/api/player/${playerUid}`);
     playerData.value = res.data;
-    
-    // Fetch all degrees
     const degreesRes = await api.get(`/api/degrees/player/${playerUid}/all_degrees`);
     earnedDegrees.value = degreesRes.data;
-
   } catch (error) {
     console.error('获取玩家数据失败:', error);
     playerData.value = null;
@@ -390,19 +324,10 @@ const fetchPlayerData = async (playerUid) => {
   }
 };
 
-const formatTime = (timestamp) => {
-  if (!timestamp) return 'N/A';
-  return new Date(timestamp * 1000).toLocaleString('zh-CN', { hour12: false });
-}
-
-// Sorting logic for the main band (Leader in the middle: 3, 1, 0, 2, 4)
 const sortedCards = computed(() => {
   if (!playerData.value || !playerData.value.enriched_cards) return null;
   const cards = playerData.value.enriched_cards;
   if (cards.length !== 5) return cards;
-  
-  // Bestdori API entries order is typically: Leader, M2, M3, M4, M5
-  // We want to display them as: M4, M2, Leader, M3, M5 (indices 3, 1, 0, 2, 4)
   return [cards[3], cards[1], cards[0], cards[2], cards[4]];
 });
 
