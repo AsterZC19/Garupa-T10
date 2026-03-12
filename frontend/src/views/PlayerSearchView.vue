@@ -116,19 +116,82 @@
               </div>
             </div>
 
+            
+
             <!-- 主乐队 -->
-            <div v-if="playerData.profile.mainDeckUserSituations && playerData.profile.mainDeckUserSituations.entries">
+            <div v-if="sortedCards">
               <h3 class="text-xl font-semibold text-gray-800 mb-4 text-center">主乐队</h3>
-              <div class="flex flex-wrap justify-center gap-2">
+              <div class="flex flex-wrap justify-center items-center gap-2">
                 <div
-                  v-for="card in playerData.profile.mainDeckUserSituations.entries"
-                  :key="card.situationId"
+                  v-for="(card) in sortedCards"
+                  :key="card.situationId" "
                 >
-                  <img
-                    :src="`https://bestdori.com/res/card/icon/${card.situationId}.png`"
-                    :alt="`Card ${card.situationId}`"
-                    class="h-16 w-16 rounded-full border-2 border-gray-300"
+                  <CardIcon 
+                    :cardId="card.situationId" 
+                    :isTrained="card.trainingStatus"
+                    :rarity="card.rarity"
+                    :attribute="card.attribute"
+                    :bandId="card.bandId"
+                    :resourceSetName="card.resourceSetName"
+                    :ripId="card.rip_id"
+                    :skillLevel="card.skillLevel"
+                    :limitBreakRank="card.limitBreakRank"
+                    :size="80"
                   />
+                </div>
+              </div>
+            </div>
+
+            <!-- 综合力 -->
+            <div v-if="playerData.bp" class="bg-white border border-gray-100 shadow-sm p-6 rounded-xl mb-6">
+              <div class="flex justify-between items-end mb-6">
+                <span class="text-gray-500 font-medium text-sm">综合力合计</span>
+                <span class="text-4xl font-black text-indigo-600 tracking-tight">
+                  {{ playerData.bp.total.toLocaleString() }}
+                </span>
+              </div>
+              
+              <div class="space-y-6">
+                <!-- Performance -->
+                <div>
+                  <div class="flex justify-between items-center mb-2">
+                    <span class="px-2 py-0.5 rounded bg-pink-100 text-pink-600 text-[10px] font-black uppercase">Performance</span>
+                    <span class="text-sm font-bold text-gray-700 tabular-nums">{{ Math.round(playerData.bp.performance).toLocaleString() }}</span>
+                  </div>
+                  <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      class="h-full bg-gradient-to-r from-pink-300 to-pink-500 rounded-full transition-all duration-1000 ease-out"
+                      :style="{ width: (playerData.bp.performance / (playerData.bp.total * 0.45) * 100) + '%' }"
+                    ></div>
+                  </div>
+                </div>
+
+                <!-- Technique -->
+                <div>
+                  <div class="flex justify-between items-center mb-2">
+                    <span class="px-2 py-0.5 rounded bg-blue-100 text-blue-600 text-[10px] font-black uppercase">Technique</span>
+                    <span class="text-sm font-bold text-gray-700 tabular-nums">{{ Math.round(playerData.bp.technique).toLocaleString() }}</span>
+                  </div>
+                  <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      class="h-full bg-gradient-to-r from-blue-300 to-blue-500 rounded-full transition-all duration-1000 ease-out"
+                      :style="{ width: (playerData.bp.technique / (playerData.bp.total * 0.45) * 100) + '%' }"
+                    ></div>
+                  </div>
+                </div>
+
+                <!-- Visual -->
+                <div>
+                  <div class="flex justify-between items-center mb-2">
+                    <span class="px-2 py-0.5 rounded bg-orange-100 text-orange-600 text-[10px] font-black uppercase">Visual</span>
+                    <span class="text-sm font-bold text-gray-700 tabular-nums">{{ Math.round(playerData.bp.visual).toLocaleString() }}</span>
+                  </div>
+                  <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      class="h-full bg-gradient-to-r from-orange-300 to-orange-500 rounded-full transition-all duration-1000 ease-out"
+                      :style="{ width: (playerData.bp.visual / (playerData.bp.total * 0.45) * 100) + '%' }"
+                    ></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -217,6 +280,7 @@ import { useRoute, useRouter } from 'vue-router';
 import api from '../api';
 import PlayerSearch from '../components/PlayerSearch.vue';
 import DegreeDisplay from '../components/DegreeDisplay.vue';
+import CardIcon from '../components/CardIcon.vue';
 
 const allDegreesData = ref(null);
 
@@ -330,6 +394,17 @@ const formatTime = (timestamp) => {
   if (!timestamp) return 'N/A';
   return new Date(timestamp * 1000).toLocaleString('zh-CN', { hour12: false });
 }
+
+// Sorting logic for the main band (Leader in the middle: 3, 1, 0, 2, 4)
+const sortedCards = computed(() => {
+  if (!playerData.value || !playerData.value.enriched_cards) return null;
+  const cards = playerData.value.enriched_cards;
+  if (cards.length !== 5) return cards;
+  
+  // Bestdori API entries order is typically: Leader, M2, M3, M4, M5
+  // We want to display them as: M4, M2, Leader, M3, M5 (indices 3, 1, 0, 2, 4)
+  return [cards[3], cards[1], cards[0], cards[2], cards[4]];
+});
 
 watch(() => route.params.uid, (newUid) => {
   if (newUid) {
