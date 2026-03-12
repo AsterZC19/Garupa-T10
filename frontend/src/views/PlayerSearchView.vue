@@ -19,12 +19,12 @@
       <!-- 查到玩家 -->
       <div
         v-else-if="playerData && playerData.profile"
-        class="bg-white shadow-xl rounded-lg overflow-hidden w-full md:max-w-[70vw] mx-auto"
+        class="bg-white shadow-xl rounded-lg overflow-hidden w-full lg:max-w-[70vw] mx-auto"
       >
-        <div class="md:flex">
+        <div class="lg:flex">
 
           <!-- 左列：头像、基础信息、称号、自我介绍 -->
-          <div class="md:w-1/2 p-4 sm:p-6 space-y-4">
+          <div class="lg:w-1/2 p-4 sm:p-6 space-y-4">
 
             <!-- 头像 -->
             <div v-if="leaderCardIllustUrl" class="relative">
@@ -52,7 +52,7 @@
               v-if="playerData.profile.userProfileDegreeMap && playerData.profile.userProfileDegreeMap.entries && allDegreesData"
               class="pb-1 overflow-hidden w-full"
             >
-              <div class="flex flex-nowrap justify-center items-center -space-x-4 sm:-space-x-2 scale-[0.55] sm:scale-75 origin-center w-full">
+              <div class="flex flex-nowrap justify-center items-center gap-2 sm:gap-3 scale-[0.55] sm:scale-75 origin-center w-full">
                 <div
                   v-for="degree in playerData.profile.userProfileDegreeMap.entries"
                   :key="degree.degreeId"
@@ -74,7 +74,7 @@
           </div>
 
           <!-- 右列：T10 记录、主乐队、综合力、乐队等级、角色等级 -->
-          <div class="md:w-1/2 p-4 sm:p-6 space-y-6 border-t md:border-t-0 md:border-l">
+          <div class="lg:w-1/2 p-4 sm:p-6 space-y-6 border-t lg:border-t-0 lg:border-l">
 
             <!-- T10 记录 -->
             <div class="pt-2 border-b pb-6">
@@ -103,12 +103,15 @@
               </div>
             </div>
 
-            <!-- 主乐队 -->
+            <!-- 主乐队 (Responsive Scaling) -->
             <div v-if="sortedCards" class="pb-2 overflow-hidden w-full">
               <h3 class="text-lg font-bold text-gray-800 mb-4 text-center">主乐队</h3>
-              <div class="flex flex-nowrap justify-center items-center gap-1 sm:gap-2 scale-[0.85] sm:scale-100 origin-center w-full">
+              <div class="flex flex-nowrap justify-center items-center 
+                          gap-0.5 sm:gap-1 md:gap-2
+                          scale-[0.7] xs:scale-[0.8] sm:scale-[0.9] md:scale-100 
+                          transition-transform duration-300 origin-center w-full">
                 <div
-                  v-for="(card) in sortedCards"
+                  v-for="card in sortedCards"
                   :key="card.situationId"
                   class="flex-shrink-0"
                 >
