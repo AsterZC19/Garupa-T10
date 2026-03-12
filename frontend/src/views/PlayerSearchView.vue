@@ -79,25 +79,39 @@
             <!-- T10 记录 -->
             <div class="pt-2 border-b pb-6">
               <h3 class="text-lg font-bold text-gray-800 mb-4 text-center">T10 记录</h3>
-              <div v-if="earnedDegrees && earnedDegrees.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+
+              <div
+                v-if="earnedDegrees && earnedDegrees.length > 0"
+                class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-2"
+              >
                 <div
                   v-for="degree in earnedDegrees"
                   :key="degree.event_id"
                   class="p-2 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-all duration-200 flex flex-col items-center border border-gray-100 hover:border-indigo-200"
                 >
+                  <!-- 活动信息 -->
                   <router-link :to="'/' + degree.event_id" class="text-center mb-1">
                     <p class="font-bold text-indigo-600 text-[10px]">
-                      EVENT #{{ degree.event_id }}
+                      活动 #{{ degree.event_id }}
                     </p>
                     <p class="text-[11px] text-gray-600 font-medium">
-                      RANK <span class="text-indigo-700 font-black">{{ degree.rank }}</span>
+                      <span class="text-indigo-700 font-black">{{ degree.rank }}</span> 位
                     </p>
                   </router-link>
-                  <div class="transform scale-[0.65] h-8 flex items-center">
-                    <DegreeDisplay :rank="degree.rank" :event_id="degree.event_id" />
+
+                  <!-- 称号 -->
+                  <div class="w-full h-8 flex justify-center items-center">
+                    <div class="transform scale-[0.45] origin-center">
+                      <DegreeDisplay
+                        :rank="degree.rank"
+                        :event_id="degree.event_id"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
+
+              <!-- 无记录 -->
               <div v-else class="text-center py-8">
                 <p class="text-gray-400 text-sm">该玩家暂无 T10 记录。</p>
               </div>

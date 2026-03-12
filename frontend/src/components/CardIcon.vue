@@ -34,7 +34,7 @@
         v-for="i in rarity"
         :key="i"
         :src="starUrl"
-        class="w-[28%] h-auto"
+        class="w-[26%] h-auto"
       />
     </div>
 
