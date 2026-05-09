@@ -49,10 +49,5 @@ cd frontend
 npm install
 ```
 
-## TODO
-- [x] 查询玩家主乐队信息
-- [ ] 并行优化
-- [x] 记录玩家色段及 T10 信息并展示
-
 ## 致谢
 感谢 Gemini-2.5-Pro, Gemini-3-Pro 以及 GPT-5.5 完成了 95% 的代码设计。
