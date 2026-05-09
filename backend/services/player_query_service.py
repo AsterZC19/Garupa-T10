@@ -153,6 +153,16 @@ def calculate_bp(profile):
         total_tech += card_t + bonus_t
         total_vis += card_v + bonus_v
 
+        append = card['entry'].get('userAppendParameter', {})
+        card_bonus = sum(append.get(key, 0) for key in (
+            'characterPotentialPerformance',
+            'characterPotentialTechnique',
+            'characterPotentialVisual',
+            'characterBonusPerformance',
+            'characterBonusTechnique',
+            'characterBonusVisual'
+        ))
+
         enriched_cards.append({
             "situationId": card['entry']['situationId'],
             "rarity": card['data'].get('rarity'),
@@ -162,7 +172,8 @@ def calculate_bp(profile):
             "resourceSetName": card['data'].get('resourceSetName'),
             "rip_id": str(card['entry']['situationId'] // 50).zfill(3),
             "skillLevel": card['entry'].get('skillLevel', 1),
-            "limitBreakRank": card['entry'].get('limitBreakRank', 0)
+            "limitBreakRank": card['entry'].get('limitBreakRank', 0),
+            "cardBonus": int(card_bonus)
         })
 
     return {

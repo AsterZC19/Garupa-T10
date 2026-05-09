@@ -117,17 +117,17 @@
             <!-- 主乐队 (Responsive Scaling) -->
             <div v-if="sortedCards" class="pb-2 overflow-hidden w-full">
               <h3 class="text-lg font-bold text-gray-800 mb-4 text-center">主乐队</h3>
-              <div class="flex flex-nowrap justify-center items-center 
+              <div class="flex flex-nowrap justify-center items-start
                           gap-0.5 sm:gap-1 md:gap-2
-                          scale-[0.7] xs:scale-[0.8] sm:scale-[0.9] md:scale-100 
+                          scale-[0.7] xs:scale-[0.8] sm:scale-[0.9] md:scale-100
                           transition-transform duration-300 origin-center w-full">
                 <div
                   v-for="card in sortedCards"
                   :key="card.situationId"
-                  class="flex-shrink-0"
+                  class="flex-shrink-0 flex flex-col items-center"
                 >
-                  <CardIcon 
-                    :cardId="card.situationId" 
+                  <CardIcon
+                    :cardId="card.situationId"
                     :isTrained="card.trainingStatus"
                     :rarity="card.rarity"
                     :attribute="card.attribute"
@@ -138,6 +138,9 @@
                     :limitBreakRank="card.limitBreakRank"
                     :size="65"
                   />
+                  <span class="mt-1 text-[11px] font-black text-indigo-500 tabular-nums leading-none">
+                    (+{{ card.cardBonus?.toLocaleString() || 0 }})
+                  </span>
                 </div>
               </div>
             </div>

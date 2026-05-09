@@ -4,7 +4,8 @@
       "Bash(python:*)",
       "Bash(git:*)",
       "Bash(npm:*)",
-      "WebFetch(domain:bestdori.com)"
+      "WebFetch(domain:bestdori.com)",
+      "Bash(PYTHONPATH=\"D:/Code/T10Web/Garupa-T10/backend\" python:*)"
     ]
   }
 }

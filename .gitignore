@@ -64,6 +64,9 @@ data.db
 .idea/
 .vscode/
 
+# AI Agent files
+.claude/
+
 # Node.js / Frontend
 # Logs
 logs
