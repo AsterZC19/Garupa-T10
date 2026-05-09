@@ -1,8 +1,9 @@
 # backend/services/statistics.py
-from models import db, PlayerScoreHistory, Event
-from sqlalchemy import and_
+from models import PlayerScoreHistory, Event
 from collections import defaultdict
-import time
+from services.ttl_cache import TTLCache
+
+hourly_stats_cache = TTLCache(60)
 
 def find_closest_point(scores, target_ts):
     """Finds the score point closest to a target timestamp."""
@@ -22,18 +23,26 @@ def calculate_hourly_stats(event_id):
     - 周回次数 (run_count): Number of times the score changes for a player in an hour.
     - 平均PT (average_pt): hourly_speed / run_count.
     """
+    cached = hourly_stats_cache.get(str(event_id))
+    if cached is not None:
+        return cached
+
     event = Event.query.filter_by(event_id=event_id).first()
     if not event:
         return {"error": "Event not found"}
 
-    history = PlayerScoreHistory.query.filter_by(event_id=event_id).order_by(PlayerScoreHistory.timestamp.asc()).all()
+    history = PlayerScoreHistory.query.with_entities(
+        PlayerScoreHistory.uid,
+        PlayerScoreHistory.timestamp,
+        PlayerScoreHistory.pt
+    ).filter_by(event_id=event_id).order_by(PlayerScoreHistory.timestamp.asc()).all()
     if not history:
         return []
 
     # Group all score records by user ID
     scores_by_uid = defaultdict(list)
-    for record in history:
-        scores_by_uid[record.uid].append((record.timestamp, record.pt))
+    for uid, timestamp, pt in history:
+        scores_by_uid[uid].append((timestamp, pt))
 
     # Determine the range of hours to generate stats for
     min_ts = history[0].timestamp
@@ -98,4 +107,4 @@ def calculate_hourly_stats(event_id):
         
         current_hour_ts = next_hour_ts
 
-    return sorted(hourly_stats, key=lambda x: x['hour_timestamp'])
+    return hourly_stats_cache.set(str(event_id), sorted(hourly_stats, key=lambda x: x['hour_timestamp']))

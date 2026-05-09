@@ -219,6 +219,7 @@ def init_scheduler(app):
     scheduler.add_job(discover_new_events, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='default', max_instances=1)
     scheduler.add_job(update_t10_achievements, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='default', max_instances=1)
     scheduler.add_job(record_top_10_scores, 'interval', args=[app], minutes=1, start_date=next_minute, misfire_grace_time=60, executor='priority', max_instances=1)
+    scheduler.add_job(backfill_all_events_history, 'date', args=[app], run_date=next_minute, misfire_grace_time=300, executor='default', max_instances=1)
 
     scheduler.start()
     logging.info("Scheduler started. Jobs aligned to start at the top of the minute/hour.")
@@ -226,6 +227,5 @@ def init_scheduler(app):
     with app.app_context():
         logging.info("Running startup jobs synchronously...")
         discover_new_events(app)
-        backfill_all_events_history(app)
         update_t10_achievements(app)
         logging.info("Startup jobs finished.")

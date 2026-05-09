@@ -69,4 +69,7 @@ class PlayerScoreHistory(db.Model):
     pt = db.Column(db.Integer)
     timestamp = db.Column(db.Integer, index=True) # ms
 
-    __table_args__ = (db.Index('ix_player_score_history_event_id_uid_timestamp', "event_id", "uid", "timestamp"), )
+    __table_args__ = (
+        db.Index('ix_player_score_history_event_id_uid_timestamp', "event_id", "uid", "timestamp", unique=True),
+        db.Index('ix_player_score_history_event_id_timestamp', "event_id", "timestamp"),
+    )

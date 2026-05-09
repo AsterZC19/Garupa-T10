@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Integer, cast
+from sqlalchemy import Integer, cast, func
 from models import db, Event, Score, ChartPoint, PlayerScoreHistory
 
 
@@ -103,44 +103,67 @@ def append_chart_points_if_missing(event_id, points):
     return len(to_add)
 
 
-def append_player_score_history_if_missing(event_id, rows):
+def append_player_score_history_if_missing(event_id, rows, batch_size=2000):
     if not rows:
         return 0
 
-    existing_points = PlayerScoreHistory.query.with_entities(
-        PlayerScoreHistory.uid,
-        PlayerScoreHistory.timestamp
-    ).filter_by(event_id=str(event_id)).all()
+    event_id = str(event_id)
+    if len(rows) <= 100:
+        tuples = [(str(row['uid']), row['timestamp']) for row in rows]
+        existing_points = db.session.query(PlayerScoreHistory.uid, PlayerScoreHistory.timestamp).filter(
+            PlayerScoreHistory.event_id == event_id,
+            db.tuple_(PlayerScoreHistory.uid, PlayerScoreHistory.timestamp).in_(tuples)
+        ).all()
+    else:
+        existing_points = PlayerScoreHistory.query.with_entities(
+            PlayerScoreHistory.uid,
+            PlayerScoreHistory.timestamp
+        ).filter_by(event_id=event_id).all()
     existing = set(existing_points)
 
-    to_add = []
+    inserted = 0
+    batch = []
     for row in rows:
         key = (str(row['uid']), row['timestamp'])
-        if key not in existing:
-            to_add.append(PlayerScoreHistory(
-                event_id=str(event_id),
-                uid=key[0],
-                name=row.get('name') or key[0],
-                pt=row['pt'],
-                timestamp=row['timestamp']
-            ))
-    if to_add:
-        db.session.bulk_save_objects(to_add)
+        if key in existing:
+            continue
+        existing.add(key)
+        batch.append(PlayerScoreHistory(
+            event_id=event_id,
+            uid=key[0],
+            name=row.get('name') or key[0],
+            pt=row['pt'],
+            timestamp=row['timestamp']
+        ))
+        if len(batch) >= batch_size:
+            db.session.bulk_save_objects(batch)
+            db.session.commit()
+            inserted += len(batch)
+            batch = []
+
+    if batch:
+        db.session.bulk_save_objects(batch)
         db.session.commit()
-    return len(to_add)
+        inserted += len(batch)
+    return inserted
 
 
 def get_scores(event_id, limit):
     return Score.query.filter_by(event_id=str(event_id)).order_by(Score.rank.asc()).limit(limit).all()
 
 
-def get_chart_history(event_id):
-    return PlayerScoreHistory.query.with_entities(
+def get_chart_history(event_id, start_ts=None, end_ts=None):
+    query = PlayerScoreHistory.query.with_entities(
         PlayerScoreHistory.uid,
         PlayerScoreHistory.name,
         PlayerScoreHistory.timestamp,
         PlayerScoreHistory.pt
-    ).filter_by(event_id=str(event_id)).order_by(PlayerScoreHistory.timestamp.asc()).all()
+    ).filter_by(event_id=str(event_id))
+    if start_ts is not None:
+        query = query.filter(PlayerScoreHistory.timestamp >= start_ts)
+    if end_ts is not None:
+        query = query.filter(PlayerScoreHistory.timestamp <= end_ts)
+    return query.order_by(PlayerScoreHistory.timestamp.asc()).all()
 
 
 def get_top_scores(event_id, limit):
@@ -156,3 +179,28 @@ def get_history_for_uids(event_id, uids):
         PlayerScoreHistory.event_id == str(event_id),
         PlayerScoreHistory.uid.in_(uids)
     ).order_by(PlayerScoreHistory.timestamp.asc()).all()
+
+
+def get_duplicate_history_points(limit=100):
+    return db.session.query(
+        PlayerScoreHistory.event_id,
+        PlayerScoreHistory.uid,
+        PlayerScoreHistory.timestamp,
+        func.count(PlayerScoreHistory.id).label('count'),
+        func.min(PlayerScoreHistory.id).label('keep_id')
+    ).group_by(
+        PlayerScoreHistory.event_id,
+        PlayerScoreHistory.uid,
+        PlayerScoreHistory.timestamp
+    ).having(func.count(PlayerScoreHistory.id) > 1).limit(limit).all()
+
+
+def count_duplicate_history_points():
+    rows = db.session.query(
+        func.count(PlayerScoreHistory.id).label('count')
+    ).group_by(
+        PlayerScoreHistory.event_id,
+        PlayerScoreHistory.uid,
+        PlayerScoreHistory.timestamp
+    ).having(func.count(PlayerScoreHistory.id) > 1).all()
+    return sum(row.count - 1 for row in rows)
