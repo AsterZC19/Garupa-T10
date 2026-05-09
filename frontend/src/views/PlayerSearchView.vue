@@ -149,7 +149,7 @@
             <div v-if="playerData.bp" class="mt-2 pb-2 overflow-hidden w-full">
 
               <h3 class="text-base font-bold text-gray-700 mb-2 text-center">
-                综合力（TODO）
+                综合力
               </h3>
 
               <!-- 内容区（和主乐队同结构，但稍微窄一点） -->

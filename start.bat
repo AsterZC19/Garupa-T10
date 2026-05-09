@@ -1,8 +1,5 @@
 @echo off
-ECHO Starting server processes...
+ECHO Starting server processes with custom runner...
 
-REM Navigate to the backend directory
-cd backend
-
-REM Start the processes defined in the Procfile
-honcho start
+REM Run the Python orchestrator script which handles shutdown signals better on Windows
+python run_server.py

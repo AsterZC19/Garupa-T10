@@ -44,7 +44,7 @@ def get_area_items():
     if area_item_cache:
         return area_item_cache
     try:
-        r = requests.get("https://bestdori.com/api/areaitems/all.5.json", timeout=10)
+        r = requests.get("https://bestdori.com/api/areaItems/main.5.json", timeout=10)
         if r.status_code == 200:
             area_item_cache = r.json()
             return area_item_cache
@@ -56,88 +56,70 @@ def calculate_bp(profile):
     main_deck = profile.get('mainDeckUserSituations', {}).get('entries', [])
     if not main_deck:
         return None
-    
+
     characters = get_characters()
     area_items_meta = get_area_items()
     enabled_area_items = profile.get('enabledUserAreaItems', {}).get('entries', [])
-    
+
     total_perf, total_tech, total_vis = 0, 0, 0
     enriched_cards = []
-    
-    # 1. First, calculate panel base stats for each card (level, episodes, potential, master rank)
     card_list = []
+
     for entry in main_deck:
         card_id = entry['situationId']
         card_data = get_card_data(card_id)
         if not card_data:
             enriched_cards.append({"situationId": card_id})
             continue
-            
+
         char_id = str(card_data.get('characterId'))
         band_id = int(characters.get(char_id, {}).get('bandId', 0))
         attr = card_data.get('attribute')
-        rarity = card_data.get('rarity', 0)
-        
-        # Base stats at current level
+
         base_stats_map = card_data.get('stat', {}).get(str(entry['level']), {})
         p = base_stats_map.get('performance', 0)
         t = base_stats_map.get('technique', 0)
         v = base_stats_map.get('visual', 0)
-        
-        # Add fixed bonuses (Training, Episodes, Potential, Character Bonus)
-        # In Bestdori mode=2, these are typically aggregated in userAppendParameter
+
         append = entry.get('userAppendParameter', {})
         p += append.get('performance', 0) + append.get('characterPotentialPerformance', 0) + append.get('characterBonusPerformance', 0)
         t += append.get('technique', 0) + append.get('characterPotentialTechnique', 0) + append.get('characterBonusTechnique', 0)
         v += append.get('visual', 0) + append.get('characterPotentialVisual', 0) + append.get('characterBonusVisual', 0)
-        
-        # Master Rank (Limit Break) Bonus
-        lb_rank = entry.get('limitBreakRank', 0)
-        if lb_rank > 0:
-            lb_val = lb_rank * rarity * 50
-            p += lb_val; t += lb_val; v += lb_val
-            
-        card_info = {
+
+        card_list.append({
             'p': p, 't': t, 'v': v,
             'attr': attr, 'band_id': band_id,
             'data': card_data, 'entry': entry
-        }
-        card_list.append(card_info)
+        })
 
-    # 2. Calculate Area Item (Infrastructure) bonuses with strict matching
     for card in card_list:
         card_p, card_t, card_v = card['p'], card['t'], card['v']
         bonus_p, bonus_t, bonus_v = 0, 0, 0
-        
+
         for item in enabled_area_items:
-            item_id = str(item.get('areaItemId'))
+            item_id = str(item.get('areaItemCategory'))
             item_lv = item.get('level')
             meta = area_items_meta.get(item_id)
-            if not meta: continue
-            
-            # Match logic: card attribute and band must be in target lists
+            if not meta:
+                continue
+
             target_attrs = meta.get('targetAttributes', [])
             target_bands = [int(b) for b in meta.get('targetBandIds', [])]
-            
-            # If list is provided, must be in it. If missing, assumed to match all (rare for instruments/etc)
-            match_attr = not target_attrs or card['attr'] in target_attrs
-            match_band = not target_bands or card['band_id'] in target_bands
-            
-            if match_attr and match_band:
-                # percentages are keyed by level string, server index 0 is JP
-                p_rate = meta.get('performance', {}).get(str(item_lv), [0])[0]
-                t_rate = meta.get('technique', {}).get(str(item_lv), [0])[0]
-                v_rate = meta.get('visual', {}).get(str(item_lv), [0])[0]
-                
-                bonus_p += (card_p * p_rate / 100)
-                bonus_t += (card_t * t_rate / 100)
-                bonus_v += (card_v * v_rate / 100)
-        
-        total_perf += (card_p + bonus_p)
-        total_tech += (card_t + bonus_t)
-        total_vis += (card_v + bonus_v)
-        
-        # Enrich for frontend
+            if card['attr'] not in target_attrs or card['band_id'] not in target_bands:
+                continue
+
+            p_rate = meta.get('performance', {}).get(str(item_lv), [0])[0]
+            t_rate = meta.get('technique', {}).get(str(item_lv), [0])[0]
+            v_rate = meta.get('visual', {}).get(str(item_lv), [0])[0]
+
+            bonus_p += card_p * p_rate / 100
+            bonus_t += card_t * t_rate / 100
+            bonus_v += card_v * v_rate / 100
+
+        total_perf += card_p + bonus_p
+        total_tech += card_t + bonus_t
+        total_vis += card_v + bonus_v
+
         enriched_cards.append({
             "situationId": card['entry']['situationId'],
             "rarity": card['data'].get('rarity'),
