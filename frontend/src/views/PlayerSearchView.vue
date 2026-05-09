@@ -355,18 +355,11 @@ watch(playerData, async (newPlayerData) => {
   }
 
   if (cardId) {
-    try {
-      const res = await api.get(`/api/cards/${cardId}`);
-      const cardDetails = res.data;
-      if (cardDetails && cardDetails.resourceSetName) {
-        const trainingString = isTrained ? '_after_training' : '_normal';
-        leaderCardIllustUrl.value = `https://bestdori.com/assets/jp/characters/resourceset/${cardDetails.resourceSetName}_rip/trim${trainingString}.png`;
-      } else {
-        const trainingString = isTrained ? '_after_training' : '_normal';
-        leaderCardIllustUrl.value = `https://bestdori.com/res/card/${cardId}_rip/trim${trainingString}.png`;
-      }
-    } catch (error) {
-      const trainingString = isTrained ? '_after_training' : '_normal';
+    const trainingString = isTrained ? '_after_training' : '_normal';
+    const cardDetails = newPlayerData.enriched_cards?.find(card => card.situationId === cardId);
+    if (cardDetails?.resourceSetName) {
+      leaderCardIllustUrl.value = `https://bestdori.com/assets/jp/characters/resourceset/${cardDetails.resourceSetName}_rip/trim${trainingString}.png`;
+    } else {
       leaderCardIllustUrl.value = `https://bestdori.com/res/card/${cardId}_rip/trim${trainingString}.png`;
     }
   } else {
@@ -387,9 +380,11 @@ const fetchPlayerData = async (playerUid) => {
   earnedDegrees.value = [];
   searchedUid.value = playerUid;
   try {
-    const res = await api.get(`/api/player/${playerUid}`);
+    const [res, degreesRes] = await Promise.all([
+      api.get(`/api/player/${playerUid}`),
+      api.get(`/api/degrees/player/${playerUid}/all_degrees`)
+    ]);
     playerData.value = res.data;
-    const degreesRes = await api.get(`/api/degrees/player/${playerUid}/all_degrees`);
     earnedDegrees.value = degreesRes.data;
   } catch (error) {
     console.error('获取玩家数据失败:', error);

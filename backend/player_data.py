@@ -3,23 +3,36 @@ import time
 import json
 import os
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 
 # Path for the new player database
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PLAYER_DB_PATH = os.path.join(BASE_DIR, 'players.db')
 
+BESTDORI_API_URL = "https://bestdori.com/api"
+PLAYER_CACHE_TTL = 60
+
+session = requests.Session()
+
 # Caches for metadata
 card_cache = {}
 character_cache = None
 area_item_cache = None
+player_cache = {}
+
+def fetch_json(path, timeout=10):
+    r = session.get(f"{BESTDORI_API_URL}{path}", timeout=timeout)
+    if r.status_code != 200:
+        return None
+    return r.json()
+
 
 def get_card_data(card_id):
     if card_id in card_cache:
         return card_cache[card_id]
     try:
-        r = requests.get(f"https://bestdori.com/api/cards/{card_id}.json", timeout=10)
-        if r.status_code == 200:
-            data = r.json()
+        data = fetch_json(f"/cards/{card_id}.json", timeout=10)
+        if data:
             card_cache[card_id] = data
             return data
     except Exception as e:
@@ -31,7 +44,7 @@ def get_characters():
     if character_cache:
         return character_cache
     try:
-        r = requests.get("https://bestdori.com/api/characters/all.2.json", timeout=10)
+        r = session.get(f"{BESTDORI_API_URL}/characters/all.2.json", timeout=10)
         if r.status_code == 200:
             character_cache = r.json()
             return character_cache
@@ -44,7 +57,7 @@ def get_area_items():
     if area_item_cache:
         return area_item_cache
     try:
-        r = requests.get("https://bestdori.com/api/areaItems/main.5.json", timeout=10)
+        r = session.get(f"{BESTDORI_API_URL}/areaItems/main.5.json", timeout=10)
         if r.status_code == 200:
             area_item_cache = r.json()
             return area_item_cache
@@ -64,10 +77,13 @@ def calculate_bp(profile):
     total_perf, total_tech, total_vis = 0, 0, 0
     enriched_cards = []
     card_list = []
+    card_ids = [entry['situationId'] for entry in main_deck]
+    with ThreadPoolExecutor(max_workers=min(5, len(card_ids))) as executor:
+        card_data_map = dict(zip(card_ids, executor.map(get_card_data, card_ids)))
 
     for entry in main_deck:
         card_id = entry['situationId']
-        card_data = get_card_data(card_id)
+        card_data = card_data_map.get(card_id)
         if not card_data:
             enriched_cards.append({"situationId": card_id})
             continue
@@ -155,52 +171,59 @@ def init_player_db():
         ''')
         conn.commit()
 
+def get_player_profile(uid):
+    return fetch_json(f"/player/jp/{uid}?mode=2", timeout=15)
+
+
+def get_player_cheer(uid):
+    return fetch_json(f"/player/jp/{uid}/cheer", timeout=15)
+
+
 def get_player(uid):
     """
     Gets player data directly from the Bestdori API.
     """
+    now = time.time()
+    cached = player_cache.get(uid)
+    if cached and now - cached['time'] < PLAYER_CACHE_TTL:
+        return cached['data']
+
     try:
-        # Fetch main profile data using the comprehensive endpoint
-        profile_url = f"https://bestdori.com/api/player/jp/{uid}?mode=2"
-        response = requests.get(profile_url, timeout=15)
-        if response.status_code != 200:
-            return None # Player not found or API error
-        
-        api_data = response.json().get('data', {})
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            profile_future = executor.submit(get_player_profile, uid)
+            cheer_future = executor.submit(get_player_cheer, uid)
+            profile_response = profile_future.result()
+            cheer_response = cheer_future.result()
+
+        api_data = (profile_response or {}).get('data', {})
         if not api_data or not api_data.get('profile'):
             return None
 
-        player_name = api_data.get('profile', {}).get('user', {}).get('name')
-
-        # Fetch event data
-        cheer_url = f"https://bestdori.com/api/player/jp/{uid}/cheer"
-        cheer_response = requests.get(cheer_url, timeout=15)
-        t10_events = []
-        if cheer_response.status_code == 200:
-            cheer_data = cheer_response.json().get('data', [])
-            for event in cheer_data:
-                if event.get('ranking') <= 10:
-                    t10_events.append({
-                        "event_id": event.get('eventId'),
-                        "rank": event.get('ranking')
-                    })
-        
-        # Sort events by ID descending to show newest first
-        t10_events.sort(key=lambda x: x['event_id'], reverse=True)
-
         profile = api_data.get('profile', {})
+        player_name = profile.get('user', {}).get('name') or profile.get('userName')
+
+        t10_events = []
+        cheer_data = (cheer_response or {}).get('data', [])
+        for event in cheer_data:
+            if event.get('ranking') <= 10:
+                t10_events.append({
+                    "event_id": event.get('eventId'),
+                    "rank": event.get('ranking')
+                })
+
+        t10_events.sort(key=lambda x: x['event_id'], reverse=True)
         bp_data, enriched_cards = calculate_bp(profile)
 
         player_data = {
             "uid": uid,
             "name": player_name,
-            "last_updated": int(time.time()),
+            "last_updated": int(now),
             "t10_events": t10_events,
-            "profile": profile, # Embed the full profile
+            "profile": profile,
             "bp": bp_data,
             "enriched_cards": enriched_cards
         }
-        
+        player_cache[uid] = {'time': now, 'data': player_data}
         return player_data
 
     except requests.exceptions.RequestException as e:

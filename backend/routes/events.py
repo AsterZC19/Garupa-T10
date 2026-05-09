@@ -23,6 +23,21 @@ def find_last_point_before(scores, target_ts):
 # In-memory store for last refresh timestamps (event_id -> timestamp)
 _last_refresh_time = {}
 REFRESH_COOLDOWN = 30  # 30 seconds
+CACHE_TTL = 60
+_chart_cache = {}
+_top_players_cache = {}
+
+
+def get_ttl_cache(cache, key):
+    item = cache.get(key)
+    if item and time.time() - item['time'] < CACHE_TTL:
+        return item['data']
+    return None
+
+
+def set_ttl_cache(cache, key, data):
+    cache[key] = {'time': time.time(), 'data': data}
+    return data
 
 @events_bp.route('/', methods=['GET'])
 def list_events():
@@ -85,6 +100,8 @@ def get_event(event_id):
                 _last_refresh_time[event_id] = 0
             if not e:
                 return jsonify({'error': 'event not found'}), 404
+        _chart_cache.clear()
+        _top_players_cache.clear()
         # Re-fetch from DB to get the updated data
         e = Event.query.filter_by(event_id=event_id).first()
         if not e:
@@ -137,56 +154,59 @@ def get_scores(event_id):
 
 @events_bp.route('/<string:event_id>/chart', methods=['GET'])
 def get_chart(event_id):
+    requested_interval = request.args.get('interval', '15m')
+    cache_key = (event_id, requested_interval)
+    cached = get_ttl_cache(_chart_cache, cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
     event = Event.query.filter_by(event_id=event_id).first()
     if not event:
         return jsonify({'error': 'event not found'}), 404
 
-    # 1. Fetch all historical points for the event from the high-resolution table
-    all_history_points = PlayerScoreHistory.query.filter_by(event_id=event_id).order_by(PlayerScoreHistory.timestamp.asc()).all()
-    if not all_history_points:
+    rows = PlayerScoreHistory.query.with_entities(
+        PlayerScoreHistory.uid,
+        PlayerScoreHistory.name,
+        PlayerScoreHistory.timestamp,
+        PlayerScoreHistory.pt
+    ).filter_by(event_id=event_id).order_by(PlayerScoreHistory.timestamp.asc()).all()
+    if not rows:
         return jsonify({})
 
-    # 2. Get all unique UIDs that have ever appeared in the history for this event
-    all_uids_in_history = list(set([p.uid for p in all_history_points]))
-
-    # 3. Get the most recent names for these UIDs from the PlayerScoreHistory table itself
-    # We can get distinct UIDs and their latest names from the history
-    # This is a bit tricky as name can change, so we'll just take the name from the latest point for each UID
     name_map = {}
-    for p in all_history_points:
-        name_map[p.uid] = p.name # Overwrite with later names, effectively getting the latest
-
-    # 4. Group all points by user
     user_points_raw = defaultdict(list)
-    for p in all_history_points:
-        user_points_raw[p.uid].append(p)
+    for uid, name, timestamp, pt in rows:
+        name_map[uid] = name
+        user_points_raw[uid].append((timestamp, pt))
 
     series = {}
-    # 5. Down-sample for each user
-    # Determine bucket size based on request parameter
-    requested_interval = request.args.get('interval', '15m')
     if requested_interval == '1h':
-        bucket_ms = 3600000 # 1 hour
-    else: # Default to 15m
-        bucket_ms = 900000 # 15 minutes
+        bucket_ms = 3600000
+    else:
+        bucket_ms = 900000
 
     for uid, points_list in user_points_raw.items():
         bucketed_points = {}
-        for p in points_list:
-            bucket_key = p.timestamp // bucket_ms
-            # Keep the last point in each bucket
-            bucketed_points[bucket_key] = {'t': p.timestamp, 'pt': p.pt}
-        
+        for timestamp, pt in points_list:
+            bucket_key = timestamp // bucket_ms
+            bucketed_points[bucket_key] = {'t': timestamp, 'pt': pt}
+
         if not bucketed_points:
             continue
 
         sampled_points = sorted(bucketed_points.values(), key=lambda x: x['t'])
         series[uid] = {'name': name_map.get(uid, uid), 'points': sampled_points}
 
-    return jsonify(series)
+    return jsonify(set_ttl_cache(_chart_cache, cache_key, series))
 
 @events_bp.route('/<string:event_id>/top_players', methods=['GET'])
 def get_top_players(event_id):
+    limit = int(request.args.get('limit', 10))
+    cache_key = (event_id, limit)
+    cached = get_ttl_cache(_top_players_cache, cache_key)
+    if cached is not None:
+        return jsonify(cached)
+
     event = Event.query.filter_by(event_id=event_id).first()
     if not event:
         # Try to fetch it if it doesn't exist
@@ -194,8 +214,6 @@ def get_top_players(event_id):
         event = Event.query.filter_by(event_id=event_id).first()
         if not event:
             return jsonify({'error': 'event not found'}), 404
-
-    limit = int(request.args.get('limit', 10))
 
     # Determine the anchor time for the hourly calculation
     now_ms = int(datetime.now().timestamp() * 1000)
@@ -215,7 +233,11 @@ def get_top_players(event_id):
 
     # Get all historical data for these top players in one query
     top_player_uids = [s.uid for s in top_scores]
-    history_records = PlayerScoreHistory.query.filter(
+    history_records = PlayerScoreHistory.query.with_entities(
+        PlayerScoreHistory.uid,
+        PlayerScoreHistory.timestamp,
+        PlayerScoreHistory.pt
+    ).filter(
         PlayerScoreHistory.event_id == event_id,
         PlayerScoreHistory.uid.in_(top_player_uids)
     ).order_by(PlayerScoreHistory.timestamp.asc()).all()
@@ -280,5 +302,5 @@ def get_top_players(event_id):
         
     # Sort back by original PT rank
     player_data.sort(key=lambda p: p['rank'])
-    
-    return jsonify(player_data)
+
+    return jsonify(set_ttl_cache(_top_players_cache, cache_key, player_data))

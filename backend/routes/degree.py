@@ -5,13 +5,18 @@ import requests
 degree_bp = Blueprint('degree_bp', __name__)
 
 BESTDORI_API_URL = 'https://bestdori.com/api'
+degrees_cache = None
 
 @degree_bp.route('/all.3.json', methods=['GET'])
 def get_all_degrees():
+    global degrees_cache
+    if degrees_cache is not None:
+        return jsonify(degrees_cache)
     try:
-        response = requests.get(f'{BESTDORI_API_URL}/degrees/all.3.json')
-        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
-        return jsonify(response.json())
+        response = requests.get(f'{BESTDORI_API_URL}/degrees/all.3.json', timeout=10)
+        response.raise_for_status()
+        degrees_cache = response.json()
+        return jsonify(degrees_cache)
     except requests.exceptions.RequestException as e:
         return jsonify({"error": str(e)}), 500
 

@@ -55,4 +55,4 @@ npm install
 - [x] 记录玩家色段及 T10 信息并展示
 
 ## 致谢
-感谢 Gemini-2.5-Pro 以及 Gemini-3-Pro 完成了 95% 的代码设计。
+感谢 Gemini-2.5-Pro, Gemini-3-Pro 以及 GPT-5.5 完成了 95% 的代码设计。
