@@ -356,7 +356,17 @@ watch(playerData, async (newPlayerData) => {
 
   if (cardId) {
     const trainingString = isTrained ? '_after_training' : '_normal';
-    const cardDetails = newPlayerData.enriched_cards?.find(card => card.situationId === cardId);
+    let cardDetails = newPlayerData.enriched_cards?.find(card => card.situationId === cardId);
+
+    if (!cardDetails?.resourceSetName) {
+      try {
+        const res = await api.get(`/api/cards/${cardId}`);
+        cardDetails = res.data;
+      } catch (error) {
+        cardDetails = null;
+      }
+    }
+
     if (cardDetails?.resourceSetName) {
       leaderCardIllustUrl.value = `https://bestdori.com/assets/jp/characters/resourceset/${cardDetails.resourceSetName}_rip/trim${trainingString}.png`;
     } else {
