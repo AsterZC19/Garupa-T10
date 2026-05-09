@@ -1,60 +1,54 @@
 # backend/routes/events.py
 from flask import Blueprint, jsonify, request, current_app
 from datetime import datetime
-import time # Added for cooldown
-from models import db
-from models import Event, Score, ChartPoint, PlayerScoreHistory
-from services.fetcher import parse_and_store_event_data
+import time
 from collections import defaultdict
-from sqlalchemy import Integer
-from sqlalchemy.sql.expression import cast
+from services.event_ingestion import parse_and_store_event_data
+from services.event_repository import (
+    get_chart_history,
+    get_current_or_latest_event,
+    get_event as find_event,
+    get_history_for_uids,
+    get_scores as find_scores,
+    get_top_scores,
+    list_events as find_events,
+    serialize_event,
+)
+from services.ttl_cache import TTLCache
 
 events_bp = Blueprint('events', __name__)
 
 # Helper functions for statistics
+def row_timestamp(row):
+    return row.timestamp
+
+
+def row_pt(row):
+    return row.pt
+
+
 def find_closest_point(scores, target_ts):
     if not scores: return None
-    return min(scores, key=lambda s: abs(s.timestamp - target_ts))
+    return min(scores, key=lambda s: abs(row_timestamp(s) - target_ts))
+
 
 def find_last_point_before(scores, target_ts):
-    relevant_scores = [s for s in scores if s.timestamp < target_ts]
+    relevant_scores = [s for s in scores if row_timestamp(s) < target_ts]
     return relevant_scores[-1] if relevant_scores else None
 
 # In-memory store for last refresh timestamps (event_id -> timestamp)
 _last_refresh_time = {}
 REFRESH_COOLDOWN = 30  # 30 seconds
-CACHE_TTL = 60
-_chart_cache = {}
-_top_players_cache = {}
-
-
-def get_ttl_cache(cache, key):
-    item = cache.get(key)
-    if item and time.time() - item['time'] < CACHE_TTL:
-        return item['data']
-    return None
-
-
-def set_ttl_cache(cache, key, data):
-    cache[key] = {'time': time.time(), 'data': data}
-    return data
+_chart_cache = TTLCache(60)
+_top_players_cache = TTLCache(60)
 
 @events_bp.route('/', methods=['GET'])
 def list_events():
-    evs = Event.query.order_by(Event.start_at.desc()).all()
-    return jsonify([{
-        'event_id': e.event_id,
-        'name': e.name,
-        'type': e.event_type,
-        'start_at': e.start_at,
-        'end_at': e.end_at,
-        'banner_url': e.banner_url,
-        'description': e.description
-    } for e in evs])
+    return jsonify([serialize_event(event) for event in find_events()])
 
 @events_bp.route('/<string:event_id>', methods=['GET'])
 def get_event(event_id):
-    e = Event.query.filter_by(event_id=event_id).first()
+    e = find_event(event_id)
 
     # Refresh data if it's missing, forced, or older than 15 minutes
     force_refresh = request.args.get('force') == 'true'
@@ -67,15 +61,7 @@ def get_event(event_id):
             current_app.logger.info(f"Skipping force refresh for event {event_id} due to cooldown.")
             # If we have existing data, return it, otherwise indicate error
             if e:
-                return jsonify({
-                    'event_id': e.event_id,
-                    'name': e.name,
-                    'type': e.event_type,
-                    'start_at': e.start_at,
-                    'end_at': e.end_at,
-                    'banner_url': e.banner_url,
-                    'description': e.description
-                })
+                return jsonify(serialize_event(e))
             else:
                 return jsonify({'error': 'event not found and refresh on cooldown'}), 404
         else:
@@ -103,51 +89,27 @@ def get_event(event_id):
         _chart_cache.clear()
         _top_players_cache.clear()
         # Re-fetch from DB to get the updated data
-        e = Event.query.filter_by(event_id=event_id).first()
+        e = find_event(event_id)
         if not e:
             return jsonify({'error': 'event not found after fetching'}), 404
 
-    return jsonify({
-        'event_id': e.event_id,
-        'name': e.name,
-        'type': e.event_type,
-        'start_at': e.start_at,
-        'end_at': e.end_at,
-        'banner_url': e.banner_url,
-        'description': e.description
-    })
+    return jsonify(serialize_event(e))
 
 @events_bp.route('/current', methods=['GET'])
 def current_or_last():
-    now_ms = int(datetime.utcnow().timestamp() * 1000)
-    current = Event.query.filter(Event.start_at <= now_ms, Event.end_at >= now_ms).order_by(Event.start_at.desc()).first()
-    if current:
-        e = current
-        is_current = True
-    else:
-        # Fallback to the event with the highest event_id
-        e = Event.query.order_by(cast(Event.event_id, Integer).desc()).first()
-        is_current = False
+    e, is_current = get_current_or_latest_event()
     if not e:
         return jsonify({'error': 'no event'}), 404
-    return jsonify({'event': {
-        'event_id': e.event_id,
-        'name': e.name,
-        'type': e.event_type,
-        'start_at': e.start_at,
-        'end_at': e.end_at,
-        'banner_url': e.banner_url,
-        'description': e.description
-    }, 'is_current': is_current})
+    return jsonify({'event': serialize_event(e), 'is_current': is_current})
 
 @events_bp.route('/<string:event_id>/scores', methods=['GET'])
 def get_scores(event_id):
-    event = Event.query.filter_by(event_id=event_id).first()
+    event = find_event(event_id)
     if not event:
         parse_and_store_event_data(event_id)
 
     limit = int(request.args.get('limit', 50))
-    scores = Score.query.filter_by(event_id=event_id).order_by(Score.rank.asc()).limit(limit).all()
+    scores = find_scores(event_id, limit)
     return jsonify([{
         'uid': s.uid, 'name': s.name, 'pt': s.pt, 'rank': s.rank, 'signature': s.signature, 'updated_at': s.updated_at
     } for s in scores])
@@ -156,20 +118,15 @@ def get_scores(event_id):
 def get_chart(event_id):
     requested_interval = request.args.get('interval', '15m')
     cache_key = (event_id, requested_interval)
-    cached = get_ttl_cache(_chart_cache, cache_key)
+    cached = _chart_cache.get(cache_key)
     if cached is not None:
         return jsonify(cached)
 
-    event = Event.query.filter_by(event_id=event_id).first()
+    event = find_event(event_id)
     if not event:
         return jsonify({'error': 'event not found'}), 404
 
-    rows = PlayerScoreHistory.query.with_entities(
-        PlayerScoreHistory.uid,
-        PlayerScoreHistory.name,
-        PlayerScoreHistory.timestamp,
-        PlayerScoreHistory.pt
-    ).filter_by(event_id=event_id).order_by(PlayerScoreHistory.timestamp.asc()).all()
+    rows = get_chart_history(event_id)
     if not rows:
         return jsonify({})
 
@@ -197,21 +154,21 @@ def get_chart(event_id):
         sampled_points = sorted(bucketed_points.values(), key=lambda x: x['t'])
         series[uid] = {'name': name_map.get(uid, uid), 'points': sampled_points}
 
-    return jsonify(set_ttl_cache(_chart_cache, cache_key, series))
+    return jsonify(_chart_cache.set(cache_key, series))
 
 @events_bp.route('/<string:event_id>/top_players', methods=['GET'])
 def get_top_players(event_id):
     limit = int(request.args.get('limit', 10))
     cache_key = (event_id, limit)
-    cached = get_ttl_cache(_top_players_cache, cache_key)
+    cached = _top_players_cache.get(cache_key)
     if cached is not None:
         return jsonify(cached)
 
-    event = Event.query.filter_by(event_id=event_id).first()
+    event = find_event(event_id)
     if not event:
         # Try to fetch it if it doesn't exist
         parse_and_store_event_data(event_id)
-        event = Event.query.filter_by(event_id=event_id).first()
+        event = find_event(event_id)
         if not event:
             return jsonify({'error': 'event not found'}), 404
 
@@ -227,20 +184,13 @@ def get_top_players(event_id):
     is_new_event = (event.start_at > start_ts)
 
     # Get top players from the main Score table (snapshot)
-    top_scores = Score.query.filter_by(event_id=event_id).order_by(Score.pt.desc()).limit(limit).all()
+    top_scores = get_top_scores(event_id, limit)
     if not top_scores:
         return jsonify([])
 
     # Get all historical data for these top players in one query
     top_player_uids = [s.uid for s in top_scores]
-    history_records = PlayerScoreHistory.query.with_entities(
-        PlayerScoreHistory.uid,
-        PlayerScoreHistory.timestamp,
-        PlayerScoreHistory.pt
-    ).filter(
-        PlayerScoreHistory.event_id == event_id,
-        PlayerScoreHistory.uid.in_(top_player_uids)
-    ).order_by(PlayerScoreHistory.timestamp.asc()).all()
+    history_records = get_history_for_uids(event_id, top_player_uids)
 
     # Group history by uid for easier processing
     scores_by_uid = defaultdict(list)
@@ -260,22 +210,22 @@ def get_top_players(event_id):
             start_point = find_closest_point(player_history, start_ts)
             end_point = find_closest_point(player_history, end_ts)
             
-            if start_point and end_point and start_point.timestamp < end_point.timestamp:
-                time_diff_h = (end_point.timestamp - start_point.timestamp) / 3600000
+            if start_point and end_point and row_timestamp(start_point) < row_timestamp(end_point):
+                time_diff_h = (row_timestamp(end_point) - row_timestamp(start_point)) / 3600000
                 if time_diff_h > 0:
-                    speed = (end_point.pt - start_point.pt) / time_diff_h
+                    speed = (row_pt(end_point) - row_pt(start_point)) / time_diff_h
                     hourly_speed = round(speed) if speed > 0 else 0
 
             # 2. Calculate Run Count for the last hour
-            scores_in_hour = [rec for rec in player_history if start_ts <= rec.timestamp < end_ts]
+            scores_in_hour = [rec for rec in player_history if start_ts <= row_timestamp(rec) < end_ts]
             if scores_in_hour:
                 last_score_before_hour = find_last_point_before(player_history, start_ts)
-                last_pt = last_score_before_hour.pt if last_score_before_hour else scores_in_hour[0].pt
+                last_pt = row_pt(last_score_before_hour) if last_score_before_hour else row_pt(scores_in_hour[0])
                 
                 for rec in scores_in_hour:
-                    if rec.pt > last_pt:
+                    if row_pt(rec) > last_pt:
                         run_count += 1
-                    last_pt = rec.pt
+                    last_pt = row_pt(rec)
 
             # 3. Calculate Average PT
             if run_count > 0:
@@ -303,4 +253,4 @@ def get_top_players(event_id):
     # Sort back by original PT rank
     player_data.sort(key=lambda p: p['rank'])
 
-    return jsonify(set_ttl_cache(_top_players_cache, cache_key, player_data))
+    return jsonify(_top_players_cache.set(cache_key, player_data))

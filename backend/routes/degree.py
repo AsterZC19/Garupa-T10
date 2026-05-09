@@ -1,24 +1,21 @@
 from flask import Blueprint, jsonify
-from models import db, PlayerDegree
-import requests
+from models import PlayerDegree
+from services.bestdori_client import client
+from services.ttl_cache import TTLCache
 
 degree_bp = Blueprint('degree_bp', __name__)
 
-BESTDORI_API_URL = 'https://bestdori.com/api'
-degrees_cache = None
+degrees_cache = TTLCache(24 * 3600)
 
 @degree_bp.route('/all.3.json', methods=['GET'])
 def get_all_degrees():
-    global degrees_cache
-    if degrees_cache is not None:
-        return jsonify(degrees_cache)
-    try:
-        response = requests.get(f'{BESTDORI_API_URL}/degrees/all.3.json', timeout=10)
-        response.raise_for_status()
-        degrees_cache = response.json()
-        return jsonify(degrees_cache)
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": str(e)}), 500
+    cached = degrees_cache.get('degrees')
+    if cached is not None:
+        return jsonify(cached)
+    data = client.get_degrees()
+    if data is None:
+        return jsonify({"error": "Failed to fetch degrees data"}), 500
+    return jsonify(degrees_cache.set('degrees', data))
 
 @degree_bp.route('/player/<uid>/all_degrees')
 def get_player_all_degrees(uid):

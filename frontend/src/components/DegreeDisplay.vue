@@ -1,23 +1,25 @@
 <template>
-  <div class="degree-container relative flex-shrink-0" :style="degreeStyle">
-    <img
-      v-if="baseImageUrl"
-      :src="baseImageUrl"
-      alt="Degree Base"
-      class="absolute inset-0 w-full h-full object-contain"
-    >
-    <img
-      v-if="frameImageUrl"
-      :src="frameImageUrl"
-      alt="Degree Frame"
-      class="absolute inset-0 w-full h-full object-contain"
-    >
-    <img
-      v-if="iconImageUrl"
-      :src="iconImageUrl"
-      alt="Degree Icon"
-      class="absolute inset-0 w-full h-full object-contain"
-    >
+  <div class="degree-shell flex-shrink-0 overflow-visible" :style="degreeStyle">
+    <div class="degree-container relative w-[230px] h-[50px] origin-top-left" :style="innerStyle">
+      <img
+        v-if="baseImageUrl"
+        :src="baseImageUrl"
+        alt="Degree Base"
+        class="absolute top-0 left-0 max-w-none"
+      >
+      <img
+        v-if="frameImageUrl"
+        :src="frameImageUrl"
+        alt="Degree Frame"
+        class="absolute top-0 left-0 max-w-none"
+      >
+      <img
+        v-if="iconImageUrl"
+        :src="iconImageUrl"
+        alt="Degree Icon"
+        class="absolute top-0 left-0 max-w-none"
+      >
+    </div>
   </div>
 </template>
 
@@ -51,15 +53,24 @@ const props = defineProps({
 });
 
 const Bestdoriurl = 'https://bestdori.com';
-const degreeAspectRatio = 50 / 230;
+const originalWidth = 230;
+const originalHeight = 50;
 
-const widthValue = computed(() => {
-  return typeof props.displayWidth === 'number' ? `${props.displayWidth}px` : props.displayWidth;
+const displayWidthNumber = computed(() => {
+  if (typeof props.displayWidth === 'number') return props.displayWidth;
+  const parsed = Number.parseFloat(props.displayWidth);
+  return Number.isFinite(parsed) ? parsed : originalWidth;
 });
 
+const scaleValue = computed(() => displayWidthNumber.value / originalWidth);
+
 const degreeStyle = computed(() => ({
-  width: widthValue.value,
-  height: `calc(${widthValue.value} * ${degreeAspectRatio})`
+  width: `${displayWidthNumber.value}px`,
+  height: `${originalHeight * scaleValue.value}px`
+}));
+
+const innerStyle = computed(() => ({
+  transform: `scale(${scaleValue.value})`
 }));
 
 // Helper to determine the rank suffix for URL construction

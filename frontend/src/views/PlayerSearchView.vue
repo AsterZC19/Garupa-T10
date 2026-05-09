@@ -58,7 +58,7 @@
                   :key="degree.degreeId"
                   :degreeId="degree.degreeId"
                   :allDegreesData="allDegreesData"
-                  displayWidth="clamp(126px, 18vw, 173px)"
+                  :displayWidth="150"
                 />
               </div>
             </div>
