@@ -50,18 +50,16 @@
             <!-- 称号 -->
             <div
               v-if="playerData.profile.userProfileDegreeMap && playerData.profile.userProfileDegreeMap.entries && allDegreesData"
-              class="pb-1 overflow-hidden w-full"
+              class="pb-2 w-full overflow-visible"
             >
-              <div class="flex flex-nowrap justify-center items-center gap-2 sm:gap-3 scale-[0.55] sm:scale-75 origin-center w-full">
-                <div
+              <div class="flex flex-wrap justify-center items-center gap-2 sm:gap-3 w-full">
+                <DegreeDisplay
                   v-for="degree in playerData.profile.userProfileDegreeMap.entries"
                   :key="degree.degreeId"
-                  class="flex-shrink-0"
-                >
-                  <div class="h-8 flex items-center">
-                    <DegreeDisplay :degreeId="degree.degreeId" :allDegreesData="allDegreesData" />
-                  </div>
-                </div>
+                  :degreeId="degree.degreeId"
+                  :allDegreesData="allDegreesData"
+                  displayWidth="clamp(126px, 18vw, 173px)"
+                />
               </div>
             </div>
 
@@ -100,13 +98,12 @@
                   </router-link>
 
                   <!-- 称号 -->
-                  <div class="w-full h-8 flex justify-center items-center">
-                    <div class="transform scale-[0.45] origin-center">
-                      <DegreeDisplay
-                        :rank="degree.rank"
-                        :event_id="degree.event_id"
-                      />
-                    </div>
+                  <div class="w-full min-h-6 flex justify-center items-center overflow-visible">
+                    <DegreeDisplay
+                      :rank="degree.rank"
+                      :event_id="degree.event_id"
+                      :displayWidth="104"
+                    />
                   </div>
                 </div>
               </div>

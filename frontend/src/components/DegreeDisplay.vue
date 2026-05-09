@@ -1,22 +1,22 @@
 <template>
-  <div class="degree-container relative w-[230px] h-[50px]">
+  <div class="degree-container relative flex-shrink-0" :style="degreeStyle">
     <img
       v-if="baseImageUrl"
       :src="baseImageUrl"
       alt="Degree Base"
-      class="absolute top-0 left-0"
+      class="absolute inset-0 w-full h-full object-contain"
     >
     <img
       v-if="frameImageUrl"
       :src="frameImageUrl"
       alt="Degree Frame"
-      class="absolute top-0 left-0"
+      class="absolute inset-0 w-full h-full object-contain"
     >
     <img
       v-if="iconImageUrl"
       :src="iconImageUrl"
       alt="Degree Icon"
-      class="absolute top-0 left-0"
+      class="absolute inset-0 w-full h-full object-contain"
     >
   </div>
 </template>
@@ -43,10 +43,24 @@ const props = defineProps({
   event_id: {
     type: String,
     required: false
+  },
+  displayWidth: {
+    type: [Number, String],
+    default: 230
   }
 });
 
 const Bestdoriurl = 'https://bestdori.com';
+const degreeAspectRatio = 50 / 230;
+
+const widthValue = computed(() => {
+  return typeof props.displayWidth === 'number' ? `${props.displayWidth}px` : props.displayWidth;
+});
+
+const degreeStyle = computed(() => ({
+  width: widthValue.value,
+  height: `calc(${widthValue.value} * ${degreeAspectRatio})`
+}));
 
 // Helper to determine the rank suffix for URL construction
 const getRankSuffix = (rank) => {
