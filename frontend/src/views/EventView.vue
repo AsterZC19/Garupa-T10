@@ -81,6 +81,7 @@ const isCurrent = ref(true)
 const scores = ref([])
 const topPlayers = ref([])
 const chartSeries = ref({})
+const lastTopPlayersContext = ref(null)
 
 const eventName = computed(() => currentEvent.value ? currentEvent.value.name : '加载中...')
 
@@ -130,8 +131,24 @@ async function loadEventData(eid, hour, force = false) {
       api.get(`/api/events/${eid}/top_players?limit=10&${params.toString()}`) 
     ])
     
+    const contextKey = `${eid}-${hour ?? 'latest'}`
+    const previousPts = lastTopPlayersContext.value === contextKey
+      ? new Map(topPlayers.value.map(player => [player.uid, player.pt]))
+      : new Map()
+
     scores.value = scoresRes.data
-    topPlayers.value = topPlayersRes.data
+    topPlayers.value = topPlayersRes.data.map(player => {
+      const previousPt = previousPts.get(player.uid)
+      const ptIncrease = typeof player.pt === 'number' && typeof previousPt === 'number'
+        ? player.pt - previousPt
+        : null
+
+      return {
+        ...player,
+        ptIncrease
+      }
+    })
+    lastTopPlayersContext.value = contextKey
 
     // Load chart data in the background
     loadChartData(eid, '15m')

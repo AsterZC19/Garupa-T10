@@ -32,7 +32,13 @@
 
           <td class="p-2 border whitespace-nowrap">{{ p.name }}</td>
           <td class="p-2 border text-center whitespace-nowrap">
-            {{ typeof p.pt === 'number' ? p.pt.toLocaleString() : p.pt }}
+            <div>{{ typeof p.pt === 'number' ? p.pt.toLocaleString() : p.pt }}</div>
+            <div
+              v-if="typeof p.ptIncrease === 'number' && p.ptIncrease >= 0"
+              class="mt-0.5 text-[10px] font-bold text-green-500 leading-none"
+            >
+              +{{ p.ptIncrease.toLocaleString() }}
+            </div>
           </td>
           <td class="p-2 border text-center whitespace-nowrap">
             {{ idx > 0 && typeof (players[idx - 1].pt - p.pt) === 'number'
