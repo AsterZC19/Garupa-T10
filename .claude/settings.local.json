@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python:*)",
       "Bash(git:*)",
-      "Bash(npm:*)"
+      "Bash(npm:*)",
+      "WebFetch(domain:bestdori.com)"
     ]
   }
 }

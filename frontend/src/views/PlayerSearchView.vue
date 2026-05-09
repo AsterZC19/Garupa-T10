@@ -266,6 +266,21 @@
               </div>
             </div>
 
+            <!-- 基建等级 -->
+            <div v-if="playerData.area_items && playerData.area_items.length" class="pb-2">
+              <h3 class="text-lg font-bold text-gray-800 mb-4 text-center">基建等级</h3>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div
+                  v-for="item in playerData.area_items"
+                  :key="item.id"
+                  class="flex items-center justify-between gap-3 px-3 py-2 bg-gray-50 rounded-lg border border-gray-100"
+                >
+                  <span class="text-sm font-medium text-gray-700 truncate">{{ item.name }}</span>
+                  <span class="text-sm font-black text-indigo-600 tabular-nums flex-shrink-0">Lv.{{ item.level }}</span>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>

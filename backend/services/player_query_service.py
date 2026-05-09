@@ -44,6 +44,44 @@ def get_area_items():
     return {}
 
 
+def get_localized_name(value):
+    if isinstance(value, list):
+        for index in (3, 2, 0, 1):
+            if index < len(value) and value[index]:
+                return value[index]
+        for item in value:
+            if item:
+                return item
+        return ''
+    return str(value) if value else ''
+
+
+def extract_area_item_levels(profile):
+    area_items_meta = get_area_items()
+    enabled_area_items = profile.get('enabledUserAreaItems', {}).get('entries', [])
+    items_by_id = {}
+
+    for item in enabled_area_items:
+        item_id = str(item.get('areaItemCategory'))
+        if not item_id or item_id == 'None':
+            continue
+
+        level = item.get('level') or 0
+        meta = area_items_meta.get(item_id) or {}
+        name = get_localized_name(meta.get('areaItemName') or meta.get('name')) or f'道具 {item_id}'
+        existing = items_by_id.get(item_id)
+        if existing and existing['level'] >= level:
+            continue
+
+        items_by_id[item_id] = {
+            'id': item_id,
+            'name': name,
+            'level': level
+        }
+
+    return sorted(items_by_id.values(), key=lambda row: int(row['id']) if row['id'].isdigit() else row['id'])
+
+
 def calculate_bp(profile):
     main_deck = profile.get('mainDeckUserSituations', {}).get('entries', [])
     if not main_deck:
@@ -187,7 +225,8 @@ def get_player(uid):
             "t10_events": t10_events,
             "profile": profile,
             "bp": bp_data,
-            "enriched_cards": enriched_cards
+            "enriched_cards": enriched_cards,
+            "area_items": extract_area_item_levels(profile)
         }
         return player_cache.set(uid, player_data)
     except Exception as e:
