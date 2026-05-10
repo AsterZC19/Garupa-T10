@@ -32,7 +32,7 @@ class BestdoriClient:
     def get_event_meta(self, event_id):
         return self.get_json(f"/events/{event_id}.json", timeout=10)
 
-    def get_event_top_data(self, event_id, server='jp', interval=900000):
+    def get_event_top_data(self, event_id, server='jp', interval=60000):
         return self.get_json(f"/eventtop/data?server={server}&event={event_id}&mid=0&interval={interval}", timeout=60 if interval == 60000 else 15)
 
     def get_player_profile(self, uid, server='jp'):

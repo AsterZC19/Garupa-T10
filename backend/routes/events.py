@@ -2,7 +2,7 @@
 from flask import Blueprint, jsonify, request, current_app
 from datetime import datetime
 import time
-from services.event_ingestion import parse_and_store_event_data
+from services.event_ingestion import TOP_PLAYERS_INTERVAL_MS, parse_and_store_event_data, refresh_event_top_data
 from services.event_query_service import clear_event_query_cache, get_chart_series, get_top_players as get_top_players_data
 from services.event_repository import (
     get_current_or_latest_event,
@@ -16,6 +16,7 @@ events_bp = Blueprint('events', __name__)
 
 # In-memory store for last refresh timestamps (event_id -> timestamp)
 _last_refresh_time = {}
+_last_top_players_refresh_time = {}
 REFRESH_COOLDOWN = 30  # 30 seconds
 
 @events_bp.route('/', methods=['GET'])
@@ -100,12 +101,22 @@ def get_chart(event_id):
 @events_bp.route('/<string:event_id>/top_players', methods=['GET'])
 def get_top_players(event_id):
     limit = int(request.args.get('limit', 10))
+    interval = int(request.args.get('interval', TOP_PLAYERS_INTERVAL_MS))
     event = find_event(event_id)
     if not event:
         parse_and_store_event_data(event_id)
         event = find_event(event_id)
         if not event:
             return jsonify({'error': 'event not found'}), 404
+
+    now_ms = int(datetime.utcnow().timestamp() * 1000)
+    is_active = event.start_at <= now_ms <= event.end_at
+    now = time.time()
+    last_refresh = _last_top_players_refresh_time.get(event_id, 0)
+    if is_active and now - last_refresh >= REFRESH_COOLDOWN:
+        _last_top_players_refresh_time[event_id] = now
+        refresh_event_top_data(event_id, interval=interval)
+        clear_event_query_cache()
 
     player_data = get_top_players_data(event_id, limit)
     if player_data is None:

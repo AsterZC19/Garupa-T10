@@ -52,6 +52,17 @@ def build_name_map(users):
     return {str(user.get('uid')): user.get('name', '') for user in users}
 
 
+def keep_latest_point_per_minute(points):
+    bucketed = {}
+    for point in points:
+        uid = str(point.get('uid'))
+        timestamp = int(point.get('time'))
+        bucket_key = (uid, timestamp // 60000)
+        if bucket_key not in bucketed or timestamp > int(bucketed[bucket_key].get('time')):
+            bucketed[bucket_key] = point
+    return sorted(bucketed.values(), key=lambda point: int(point.get('time')))
+
+
 def compute_speeds_and_store(event_id, top_json):
     if top_json is None:
         return
@@ -62,7 +73,7 @@ def compute_speeds_and_store(event_id, top_json):
 
     chart_rows = [
         {'uid': str(point.get('uid')), 'timestamp': int(point.get('time')), 'pt': int(point.get('value', 0))}
-        for point in points
+        for point in keep_latest_point_per_minute(points)
     ]
     repo.append_chart_points_if_missing(event_id, chart_rows)
 
@@ -107,6 +118,9 @@ def compute_speeds_and_store(event_id, top_json):
     repo.replace_scores(event_id, score_rows)
 
 
+TOP_PLAYERS_INTERVAL_MS = 10000
+
+
 def parse_and_store_event_data(event_id, server='jp'):
     meta = client.get_event_meta(event_id)
     if not meta:
@@ -128,7 +142,7 @@ def build_history_rows(event_id, top_json):
     users = top_json.get('users', []) if top_json else []
     name_map = build_name_map(users)
     rows = []
-    for point in points:
+    for point in keep_latest_point_per_minute(points):
         uid = str(point.get('uid'))
         name = name_map.get(uid)
         rows.append({
@@ -148,47 +162,19 @@ def backfill_event_history(event_id, server='jp', interval=60000):
     return repo.append_player_score_history_if_missing(event_id, rows)
 
 
+def refresh_event_top_data(event_id, server='jp', interval=TOP_PLAYERS_INTERVAL_MS):
+    top = client.get_event_top_data(event_id, server=server, interval=interval)
+    if top is None:
+        return 0
+
+    history_rows = build_history_rows(event_id, top)
+    compute_speeds_and_store(event_id, top)
+    return repo.append_player_score_history_if_missing(event_id, history_rows)
+
+
 def record_active_event_top_10(server='jp'):
     active_event = repo.get_active_event()
     if not active_event:
         return 0
 
-    event_id = active_event.event_id
-    top = client.get_event_top_data(event_id, server=server, interval=900000)
-    if top is None:
-        return 0
-
-    points = top.get('points', [])
-    users = top.get('users', [])
-    if not points:
-        return 0
-
-    latest_scores = latest_points_by_uid(points)
-    ranking = sorted(latest_scores.values(), key=lambda item: item['pt'], reverse=True)[:10]
-    user_meta_map = {str(user.get('uid')): user for user in users}
-
-    score_rows = []
-    history_rows = []
-    for index, item in enumerate(ranking, start=1):
-        uid = item['uid']
-        meta = user_meta_map.get(uid, {})
-        name = meta.get('name')
-        final_name = name if name and name.strip() else uid
-        score_rows.append({
-            'event_id': str(event_id),
-            'uid': uid,
-            'name': final_name,
-            'pt': item['pt'],
-            'rank': index,
-            'signature': meta.get('introduction', ''),
-            'updated_at': item['timestamp']
-        })
-        history_rows.append({
-            'uid': uid,
-            'name': final_name,
-            'pt': item['pt'],
-            'timestamp': item['timestamp']
-        })
-
-    repo.replace_scores(event_id, score_rows)
-    return repo.append_player_score_history_if_missing(event_id, history_rows)
+    return refresh_event_top_data(active_event.event_id, server=server, interval=TOP_PLAYERS_INTERVAL_MS)

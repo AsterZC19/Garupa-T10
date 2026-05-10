@@ -7,7 +7,7 @@ def fetch_event_meta(event_id):
 
 
 def fetch_top_data(event_id, server='jp'):
-    return client.get_event_top_data(event_id, server=server, interval=900000)
+    return client.get_event_top_data(event_id, server=server, interval=60000)
 
 
 def upsert_event_from_meta(event_id, meta):

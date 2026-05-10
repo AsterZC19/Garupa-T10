@@ -128,7 +128,7 @@ async function loadEventData(eid, hour, force = false) {
     // Load scores and top players in parallel
     const [scoresRes, topPlayersRes] = await Promise.all([
       api.get(`/api/events/${eid}/scores?limit=50&${params.toString()}`),
-      api.get(`/api/events/${eid}/top_players?limit=10&${params.toString()}`) 
+      api.get(`/api/events/${eid}/top_players?limit=10&interval=10000&${params.toString()}`)
     ])
     
     const contextKey = `${eid}-${hour ?? 'latest'}`
