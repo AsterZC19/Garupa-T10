@@ -1,6 +1,10 @@
 <template>
-  <div class="overflow-x-auto">
-    <table class="min-w-full bg-white border text-sm">
+  <div>
+    <div class="mb-1 text-right text-[11px] text-gray-400">
+      当前更新时间：{{ latestUpdateTime }}
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full bg-white border text-sm">
       <thead>
         <tr>
           <th class="p-2 border whitespace-nowrap">位次</th>
@@ -13,7 +17,6 @@
           <th class="p-2 border whitespace-nowrap">周回次数</th>
           <th class="p-2 border whitespace-nowrap">平均PT</th>
           <th class="p-2 border whitespace-nowrap">签名</th>
-          <th class="p-2 border whitespace-nowrap">当前更新时间</th>
         </tr>
       </thead>
       <tbody>
@@ -60,19 +63,26 @@
           <td class="p-2 border whitespace-nowrap">
             {{ p.signature }}
           </td>
-          <td class="p-2 border text-center whitespace-nowrap">
-            {{ formatTs(p.score_updated_at) }}
-          </td>
         </tr>
       </tbody>
-    </table>
+      </table>
+    </div>
   </div>
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import { formatTs } from '../utils.js';
 
-defineProps({
+const props = defineProps({
   players: Array
+})
+
+const latestUpdateTime = computed(() => {
+  const timestamps = (props.players || [])
+    .map(player => player.score_updated_at)
+    .filter(timestamp => typeof timestamp === 'number')
+  if (!timestamps.length) return '-'
+  return formatTs(Math.max(...timestamps))
 })
 </script>

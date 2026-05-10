@@ -82,6 +82,7 @@ const scores = ref([])
 const topPlayers = ref([])
 const chartSeries = ref({})
 const lastTopPlayersContext = ref(null)
+const isInitialEventLoad = ref(true)
 
 const eventName = computed(() => currentEvent.value ? currentEvent.value.name : '加载中...')
 
@@ -198,8 +199,10 @@ watch(() => route.params.eventId, (newId) => {
   const newEventId = newId ? parseInt(newId, 10) : null;
   selectedEventId.value = newEventId;
   if (newEventId) {
-    loadEventData(newEventId, selectedHour.value);
-  } 
+    const forceInitialRefresh = isInitialEventLoad.value;
+    isInitialEventLoad.value = false;
+    loadEventData(newEventId, selectedHour.value, forceInitialRefresh);
+  }
 }, { immediate: true });
 
 onMounted(async () => {
