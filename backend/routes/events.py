@@ -109,14 +109,18 @@ def get_top_players(event_id):
         if not event:
             return jsonify({'error': 'event not found'}), 404
 
+    refresh_requested = request.args.get('refresh') == 'true'
+    force_refresh = request.args.get('force') == 'true'
     now_ms = int(datetime.utcnow().timestamp() * 1000)
     is_active = event.start_at <= now_ms <= event.end_at
     now = time.time()
     last_refresh = _last_top_players_refresh_time.get(event_id, 0)
-    if is_active and now - last_refresh >= REFRESH_COOLDOWN:
+    can_refresh = force_refresh or now - last_refresh >= REFRESH_COOLDOWN
+    if (is_active or force_refresh) and (refresh_requested or is_active) and can_refresh:
         _last_top_players_refresh_time[event_id] = now
-        refresh_event_top_data(event_id, interval=interval)
-        clear_event_query_cache()
+        inserted = refresh_event_top_data(event_id, interval=interval)
+        if inserted is not None:
+            clear_event_query_cache()
 
     player_data = get_top_players_data(event_id, limit)
     if player_data is None:

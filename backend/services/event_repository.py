@@ -82,25 +82,38 @@ def replace_scores(event_id, rows):
 
 
 def append_chart_points_if_missing(event_id, points):
-    existing = set()
-    for item in ChartPoint.query.with_entities(ChartPoint.uid, ChartPoint.timestamp).filter_by(event_id=str(event_id)).all():
-        existing.add((item.uid, item.timestamp))
+    event_id = str(event_id)
+    existing_points = ChartPoint.query.filter_by(event_id=event_id).all()
+    existing = {(point.uid, point.timestamp): point for point in existing_points}
 
+    changed = 0
     to_add = []
     for point in points:
         key = (str(point['uid']), point['timestamp'])
-        if key not in existing:
-            to_add.append(ChartPoint(
-                event_id=str(event_id),
-                uid=key[0],
-                name=point.get('name', ''),
-                timestamp=point['timestamp'],
-                pt=point['pt']
-            ))
+        existing_point = existing.get(key)
+        if existing_point:
+            if existing_point.pt != point['pt'] or existing_point.name != point.get('name', ''):
+                existing_point.pt = point['pt']
+                existing_point.name = point.get('name', '')
+                changed += 1
+            continue
+
+        new_point = ChartPoint(
+            event_id=event_id,
+            uid=key[0],
+            name=point.get('name', ''),
+            timestamp=point['timestamp'],
+            pt=point['pt']
+        )
+        existing[key] = new_point
+        to_add.append(new_point)
+
     if to_add:
         db.session.bulk_save_objects(to_add)
+        changed += len(to_add)
+    if changed:
         db.session.commit()
-    return len(to_add)
+    return changed
 
 
 def append_player_score_history_if_missing(event_id, rows, batch_size=2000):
@@ -108,44 +121,46 @@ def append_player_score_history_if_missing(event_id, rows, batch_size=2000):
         return 0
 
     event_id = str(event_id)
-    if len(rows) <= 100:
-        tuples = [(str(row['uid']), row['timestamp']) for row in rows]
-        existing_points = db.session.query(PlayerScoreHistory.uid, PlayerScoreHistory.timestamp).filter(
-            PlayerScoreHistory.event_id == event_id,
-            db.tuple_(PlayerScoreHistory.uid, PlayerScoreHistory.timestamp).in_(tuples)
-        ).all()
-    else:
-        existing_points = PlayerScoreHistory.query.with_entities(
-            PlayerScoreHistory.uid,
-            PlayerScoreHistory.timestamp
-        ).filter_by(event_id=event_id).all()
-    existing = set(existing_points)
+    tuples = [(str(row['uid']), row['timestamp']) for row in rows]
+    existing_points = PlayerScoreHistory.query.filter(
+        PlayerScoreHistory.event_id == event_id,
+        db.tuple_(PlayerScoreHistory.uid, PlayerScoreHistory.timestamp).in_(tuples)
+    ).all()
+    existing = {(point.uid, point.timestamp): point for point in existing_points}
 
-    inserted = 0
+    changed = 0
     batch = []
     for row in rows:
         key = (str(row['uid']), row['timestamp'])
-        if key in existing:
+        name = row.get('name') or key[0]
+        existing_point = existing.get(key)
+        if existing_point:
+            if existing_point.pt != row['pt'] or existing_point.name != name:
+                existing_point.pt = row['pt']
+                existing_point.name = name
+                changed += 1
             continue
-        existing.add(key)
-        batch.append(PlayerScoreHistory(
+
+        new_point = PlayerScoreHistory(
             event_id=event_id,
             uid=key[0],
-            name=row.get('name') or key[0],
+            name=name,
             pt=row['pt'],
             timestamp=row['timestamp']
-        ))
+        )
+        existing[key] = new_point
+        batch.append(new_point)
         if len(batch) >= batch_size:
             db.session.bulk_save_objects(batch)
-            db.session.commit()
-            inserted += len(batch)
+            changed += len(batch)
             batch = []
 
     if batch:
         db.session.bulk_save_objects(batch)
+        changed += len(batch)
+    if changed:
         db.session.commit()
-        inserted += len(batch)
-    return inserted
+    return changed
 
 
 def get_scores(event_id, limit):

@@ -57,10 +57,16 @@ def keep_latest_point_per_minute(points):
     for point in points:
         uid = str(point.get('uid'))
         timestamp = int(point.get('time'))
-        bucket_key = (uid, timestamp // 60000)
-        if bucket_key not in bucketed or timestamp > int(bucketed[bucket_key].get('time')):
-            bucketed[bucket_key] = point
-    return sorted(bucketed.values(), key=lambda point: int(point.get('time')))
+        minute_ts = (timestamp // 60000) * 60000
+        bucket_key = (uid, minute_ts)
+        if bucket_key not in bucketed or timestamp > bucketed[bucket_key]['source_time']:
+            bucketed[bucket_key] = {
+                'uid': uid,
+                'time': minute_ts,
+                'source_time': timestamp,
+                'value': point.get('value')
+            }
+    return sorted(bucketed.values(), key=lambda point: (point['time'], point['uid']))
 
 
 def compute_speeds_and_store(event_id, top_json):

@@ -125,11 +125,17 @@ async function loadEventData(eid, hour, force = false) {
       params.append('hour', hour)
     }
 
-    // Load scores and top players in parallel
-    const [scoresRes, topPlayersRes] = await Promise.all([
-      api.get(`/api/events/${eid}/scores?limit=50&${params.toString()}`),
-      api.get(`/api/events/${eid}/top_players?limit=10&interval=10000&${params.toString()}`)
-    ])
+    const topPlayersParams = new URLSearchParams(params)
+    topPlayersParams.set('limit', 10)
+    topPlayersParams.set('interval', 10000)
+    topPlayersParams.set('refresh', 'true')
+    if (force) {
+      topPlayersParams.set('force', 'true')
+    }
+
+    // Load top players first because it may refresh the stored table/history data.
+    const topPlayersRes = await api.get(`/api/events/${eid}/top_players?${topPlayersParams.toString()}`)
+    const scoresRes = await api.get(`/api/events/${eid}/scores?limit=50&${params.toString()}`)
     
     const contextKey = `${eid}-${hour ?? 'latest'}`
     const previousPts = lastTopPlayersContext.value === contextKey
@@ -166,8 +172,7 @@ async function loadEventData(eid, hour, force = false) {
 
 async function forceRefresh() {
   if (selectedEventId.value && !isRefreshing.value) {
-    // Set force to false to just re-fetch from local backend, not upstream API
-    await loadEventData(selectedEventId.value, selectedHour.value, false);
+    await loadEventData(selectedEventId.value, selectedHour.value, true);
   }
 }
 
