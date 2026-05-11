@@ -81,9 +81,23 @@ def replace_scores(event_id, rows):
     db.session.commit()
 
 
-def append_chart_points_if_missing(event_id, points):
+def chunked(items, size):
+    for index in range(0, len(items), size):
+        yield items[index:index + size]
+
+
+def append_chart_points_if_missing(event_id, points, chunk_size=400):
     event_id = str(event_id)
-    existing_points = ChartPoint.query.filter_by(event_id=event_id).all()
+    if not points:
+        return 0
+
+    tuples = [(str(point['uid']), point['timestamp']) for point in points]
+    existing_points = []
+    for chunk in chunked(tuples, chunk_size):
+        existing_points.extend(ChartPoint.query.filter(
+            ChartPoint.event_id == event_id,
+            db.tuple_(ChartPoint.uid, ChartPoint.timestamp).in_(chunk)
+        ).all())
     existing = {(point.uid, point.timestamp): point for point in existing_points}
 
     changed = 0
@@ -116,16 +130,18 @@ def append_chart_points_if_missing(event_id, points):
     return changed
 
 
-def append_player_score_history_if_missing(event_id, rows, batch_size=2000):
+def append_player_score_history_if_missing(event_id, rows, batch_size=2000, chunk_size=400):
     if not rows:
         return 0
 
     event_id = str(event_id)
     tuples = [(str(row['uid']), row['timestamp']) for row in rows]
-    existing_points = PlayerScoreHistory.query.filter(
-        PlayerScoreHistory.event_id == event_id,
-        db.tuple_(PlayerScoreHistory.uid, PlayerScoreHistory.timestamp).in_(tuples)
-    ).all()
+    existing_points = []
+    for chunk in chunked(tuples, chunk_size):
+        existing_points.extend(PlayerScoreHistory.query.filter(
+            PlayerScoreHistory.event_id == event_id,
+            db.tuple_(PlayerScoreHistory.uid, PlayerScoreHistory.timestamp).in_(chunk)
+        ).all())
     existing = {(point.uid, point.timestamp): point for point in existing_points}
 
     changed = 0

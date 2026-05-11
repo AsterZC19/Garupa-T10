@@ -124,7 +124,7 @@ def compute_speeds_and_store(event_id, top_json):
     repo.replace_scores(event_id, score_rows)
 
 
-TOP_PLAYERS_INTERVAL_MS = 10000
+TOP_PLAYERS_INTERVAL_MS = 60000
 
 
 def parse_and_store_event_data(event_id, server='jp'):
