@@ -136,7 +136,7 @@ async function loadTableData(eid, hour, force = false, loadChart = true) {
 
     const topPlayersParams = new URLSearchParams(params)
     topPlayersParams.set('limit', 10)
-    topPlayersParams.set('interval', 10000)
+    topPlayersParams.set('interval', 60000)
     topPlayersParams.set('refresh', 'true')
     if (force) {
       topPlayersParams.set('force', 'true')
