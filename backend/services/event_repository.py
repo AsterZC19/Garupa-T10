@@ -88,10 +88,16 @@ def chunked(items, size):
         yield items[index:index + size]
 
 
-def append_chart_points_if_missing(event_id, points, chunk_size=400):
+def append_chart_points_if_missing(event_id, points, chunk_size=400, min_timestamp=0):
     event_id = str(event_id)
     if not points:
         return 0
+
+    # Filter to only process points newer than min_timestamp
+    if min_timestamp:
+        points = [p for p in points if p['timestamp'] >= min_timestamp]
+        if not points:
+            return 0
 
     tuples = [(str(point['uid']), point['timestamp']) for point in points]
     existing_points = []
@@ -255,11 +261,17 @@ def backfill_chart_data_cache(event_id=None):
     return total
 
 
-def append_player_score_history_if_missing(event_id, rows, batch_size=2000, chunk_size=400):
+def append_player_score_history_if_missing(event_id, rows, batch_size=2000, chunk_size=400, min_timestamp=0):
     if not rows:
         return 0
 
     event_id = str(event_id)
+    # Filter to only process rows newer than min_timestamp (skip already-stored data)
+    if min_timestamp:
+        rows = [r for r in rows if r['timestamp'] >= min_timestamp]
+        if not rows:
+            return 0
+
     tuples = [(str(row['uid']), row['timestamp']) for row in rows]
     existing_points = []
     for chunk in chunked(tuples, chunk_size):

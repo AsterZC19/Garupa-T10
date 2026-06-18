@@ -69,6 +69,36 @@ def keep_latest_point_per_minute(points):
     return sorted(bucketed.values(), key=lambda point: (point['time'], point['uid']))
 
 
+def _process_points_single_pass(points):
+    """Single pass: bucket by minute AND find latest point per uid.
+    Returns (bucketed_list, latest_by_uid) — replaces separate calls to
+    keep_latest_point_per_minute + latest_points_by_uid with one iteration."""
+    bucketed = {}
+    latest_by_uid = {}
+    for point in points:
+        uid = str(point.get('uid'))
+        timestamp = int(point.get('time'))
+        pt = int(point.get('value', 0))
+        minute_ts = (timestamp // 60000) * 60000
+
+        # Bucket by (uid, minute)
+        bucket_key = (uid, minute_ts)
+        if bucket_key not in bucketed or timestamp > bucketed[bucket_key]['source_time']:
+            bucketed[bucket_key] = {
+                'uid': uid,
+                'time': minute_ts,
+                'source_time': timestamp,
+                'value': point.get('value')
+            }
+
+        # Latest per uid (for score ranking)
+        if uid not in latest_by_uid or timestamp > latest_by_uid[uid]['timestamp']:
+            latest_by_uid[uid] = {'uid': uid, 'timestamp': timestamp, 'pt': pt}
+
+    bucketed_list = sorted(bucketed.values(), key=lambda p: (p['time'], p['uid']))
+    return bucketed_list, latest_by_uid
+
+
 def compute_speeds_and_store(event_id, top_json):
     if top_json is None:
         return
@@ -126,6 +156,9 @@ def compute_speeds_and_store(event_id, top_json):
 
 TOP_PLAYERS_INTERVAL_MS = 60000
 
+# Track last stored timestamp per event so the 1-min refresh only processes new data
+_last_stored_ts = {}
+
 
 def parse_and_store_event_data(event_id, server='jp'):
     meta = client.get_event_meta(event_id)
@@ -173,9 +206,80 @@ def refresh_event_top_data(event_id, server='jp', interval=TOP_PLAYERS_INTERVAL_
     if top is None:
         return 0
 
-    history_rows = build_history_rows(event_id, top)
-    compute_speeds_and_store(event_id, top)
-    return repo.append_player_score_history_if_missing(event_id, history_rows)
+    points = top.get('points', [])
+    users = top.get('users', [])
+    if not points:
+        return 0
+
+    # --- Single pass over all points: bucket + latest-per-uid ---
+    bucketed_points, latest_by_uid = _process_points_single_pass(points)
+
+    # --- Chart rows (from bucketed points) ---
+    chart_rows = [
+        {'uid': p['uid'], 'timestamp': p['time'], 'pt': int(p.get('value', 0))}
+        for p in bucketed_points
+    ]
+    min_ts = _last_stored_ts.get(str(event_id), 0)
+    repo.append_chart_points_if_missing(event_id, chart_rows, min_timestamp=min_ts)
+
+    # --- Score rows (from users or latest_by_uid) ---
+    event = repo.get_event(event_id)
+    latest_data_timestamp = (
+        max(p['source_time'] for p in bucketed_points) if bucketed_points
+        else (event.end_at if event and event.end_at > 0 else repo.now_ms())
+    )
+    if latest_data_timestamp == 0:
+        latest_data_timestamp = event.end_at if event and event.end_at > 0 else repo.now_ms()
+
+    score_rows = []
+    if users:
+        for user in users:
+            uid = str(user.get('uid'))
+            score_rows.append({
+                'event_id': str(event_id),
+                'uid': uid,
+                'name': user.get('name') or '',
+                'pt': int(user.get('current_pt') or latest_by_uid.get(uid, {}).get('pt', 0)),
+                'rank': user.get('ranking') or 0,
+                'signature': user.get('introduction') or '',
+                'updated_at': latest_data_timestamp
+            })
+    else:
+        ranked = sorted(latest_by_uid.values(), key=lambda item: item['pt'], reverse=True)
+        for index, item in enumerate(ranked, start=1):
+            score_rows.append({
+                'event_id': str(event_id),
+                'uid': item['uid'],
+                'name': item['uid'],
+                'pt': item['pt'],
+                'rank': index,
+                'signature': '',
+                'updated_at': latest_data_timestamp
+            })
+
+    repo.replace_scores(event_id, score_rows)
+
+    # --- History rows (from bucketed points + name map) ---
+    name_map = build_name_map(users)
+    history_rows = []
+    for p in bucketed_points:
+        uid = p['uid']
+        name = name_map.get(uid)
+        history_rows.append({
+            'uid': uid,
+            'name': name if name and name.strip() else uid,
+            'pt': p.get('value'),
+            'timestamp': p['time']
+        })
+
+    result = repo.append_player_score_history_if_missing(event_id, history_rows, min_timestamp=min_ts)
+
+    # Update last-stored timestamp cache so next run skips already-processed data
+    if bucketed_points:
+        max_ts = max(p['time'] for p in bucketed_points)
+        _last_stored_ts[str(event_id)] = max(_last_stored_ts.get(str(event_id), 0), max_ts)
+
+    return result
 
 
 def record_active_event_top_10(server='jp'):
