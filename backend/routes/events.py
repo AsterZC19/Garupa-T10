@@ -16,7 +16,7 @@ from services.event_repository import (
 events_bp = Blueprint('events', __name__)
 
 # Background thread pool for non-blocking data refreshes
-_refresh_executor = ThreadPoolExecutor(max_workers=2)
+_refresh_executor = ThreadPoolExecutor(max_workers=1)
 
 # In-memory store for last refresh timestamps (event_id -> timestamp)
 _last_refresh_time = {}

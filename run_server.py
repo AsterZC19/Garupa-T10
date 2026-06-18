@@ -48,7 +48,7 @@ def main():
     
     # Start Web Server
     print("Starting Web Server (Waitress)...")
-    web_cmd = [sys.executable, "-m", "waitress", "--listen=0.0.0.0:11112", "--threads=4", "app:app"]
+    web_cmd = [sys.executable, "-m", "waitress", "--listen=0.0.0.0:11112", "--threads=2", "app:app"]
     web_process = subprocess.Popen(web_cmd, cwd=backend_dir)
     processes.append(web_process)
     

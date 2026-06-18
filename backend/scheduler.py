@@ -208,7 +208,7 @@ def init_scheduler(app):
     """Initializes and starts the scheduler with aligned job start times."""
     executors = {
         'default': ThreadPoolExecutor(1),
-        'priority': ThreadPoolExecutor(3)
+        'priority': ThreadPoolExecutor(1)
     }
     scheduler = BackgroundScheduler(executors=executors, daemon=True)
 

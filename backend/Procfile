@@ -1,2 +1,2 @@
-web: waitress-serve --listen=0.0.0.0:11112 --threads=4 app:app
+web: waitress-serve --listen=0.0.0.0:11112 --threads=2 app:app
 worker: python run_scheduler.py
