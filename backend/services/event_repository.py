@@ -254,6 +254,20 @@ def get_chart_history_aggregated(event_id, bucket_ms):
     ).order_by('bucket_ts').all()
 
 
+def get_chart_history_aggregated_fallback(event_id, bucket_ms):
+    """Fallback: aggregate from chart_points table when player_score_history has no data."""
+    bucket_key = func.floor(ChartPoint.timestamp / bucket_ms).cast(Integer)
+    return db.session.query(
+        ChartPoint.uid,
+        func.max(ChartPoint.name).label('name'),
+        (bucket_key * bucket_ms).label('bucket_ts'),
+        func.max(ChartPoint.pt).label('pt')
+    ).filter_by(event_id=str(event_id)).group_by(
+        ChartPoint.uid,
+        bucket_key
+    ).order_by('bucket_ts').all()
+
+
 def get_top_scores(event_id, limit):
     return Score.query.filter_by(event_id=str(event_id)).order_by(Score.pt.desc()).limit(limit).all()
 

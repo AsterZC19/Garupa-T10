@@ -34,14 +34,17 @@
       </div>
     </section>
 
-    <main class="space-y-6 transition-opacity" :class="{ 'opacity-50 pointer-events-none': isRefreshing }">
-      <div>
+    <main class="space-y-6">
+      <div :class="{ 'opacity-50': isRefreshing }">
         <h3 class="font-semibold mb-2 text-center">T10 时速</h3>
         <TopPlayersTable :players="topPlayers" />
       </div>
       <div>
         <h3 class="font-semibold mb-2 text-center">时速曲线</h3>
-        <ChartComponent :series="chartSeries" :current-event="currentEvent" />
+        <div v-if="isChartLoading" class="h-[800px] sm:h-[900px] md:h-[1000px] lg:h-[1100px] flex items-center justify-center text-gray-400">
+          <span class="animate-pulse">图表加载中...</span>
+        </div>
+        <ChartComponent v-else :series="chartSeries" :current-event="currentEvent" />
       </div>
       <br />
       <!-- 页脚 -->
@@ -86,6 +89,7 @@ const isInitialEventLoad = ref(true)
 const eventName = computed(() => currentEvent.value ? currentEvent.value.name : '加载中...')
 
 const isRefreshing = ref(false)
+const isChartLoading = ref(false)
 const refreshInterval = ref(null)
 const REFRESH_INTERVAL_SECONDS = 2 * 60; // 2 minutes
 const countdown = ref(REFRESH_INTERVAL_SECONDS);
@@ -94,24 +98,29 @@ const refreshButtonText = computed(() => {
   if (isRefreshing.value) {
     return '刷新中...';
   }
+  if (isChartLoading.value) {
+    return '图表加载中...';
+  }
   return `刷新 (${countdown.value}s)`;
 });
 
-async function loadChartData(eid, interval) {
+async function loadChartDataAsync(eid, interval) {
   if (!eid) return
+  isChartLoading.value = true
   try {
     const res = await api.get(`/api/events/${eid}/chart?interval=${interval}`)
     chartSeries.value = res.data
   } catch (error) {
     console.error(`获取图表数据失败 (interval: ${interval}):`, error)
     chartSeries.value = {}
+  } finally {
+    isChartLoading.value = false
   }
 }
 
-async function loadEventData(eid, hour, force = false) {
+async function loadTableData(eid, hour, force = false, loadChart = true) {
   if (!eid) return
   isRefreshing.value = true
-  chartSeries.value = {} // Clear chart data before loading
   try {
     const eventParams = new URLSearchParams();
     if (force) {
@@ -133,7 +142,6 @@ async function loadEventData(eid, hour, force = false) {
       topPlayersParams.set('force', 'true')
     }
 
-    // Load top players first because it may refresh the stored table/history data.
     const topPlayersRes = await api.get(`/api/events/${eid}/top_players?${topPlayersParams.toString()}`)
 
     const contextKey = `${eid}-${hour ?? 'latest'}`
@@ -153,23 +161,23 @@ async function loadEventData(eid, hour, force = false) {
       }
     })
     lastTopPlayersContext.value = contextKey
-
-    // Load chart data in the background
-    loadChartData(eid, '15m')
-
   } catch (error) {
     console.error('获取活动数据失败:', error)
-    chartSeries.value = {}
     topPlayers.value = []
   } finally {
     isRefreshing.value = false
     countdown.value = REFRESH_INTERVAL_SECONDS;
   }
+
+  // Chart data loads after table is visible (slow, don't block UI)
+  if (loadChart) {
+    loadChartDataAsync(eid, '15m')
+  }
 }
 
 async function forceRefresh() {
   if (selectedEventId.value && !isRefreshing.value) {
-    await loadEventData(selectedEventId.value, selectedHour.value, true);
+    await loadTableData(selectedEventId.value, selectedHour.value, true);
   }
 }
 
@@ -197,7 +205,7 @@ watch(() => route.params.eventId, (newId) => {
   if (newEventId) {
     const forceInitialRefresh = isInitialEventLoad.value;
     isInitialEventLoad.value = false;
-    loadEventData(newEventId, selectedHour.value, forceInitialRefresh);
+    loadTableData(newEventId, selectedHour.value, forceInitialRefresh);
   }
 }, { immediate: true });
 
@@ -234,9 +242,9 @@ onMounted(async () => {
     if (countdown.value > 0) {
       countdown.value--;
     } else {
-      // Only auto-refresh if event is still active
+      // Only auto-refresh table if event is still active (chart updates every 15min)
       if (!isEventEnded()) {
-        forceRefresh();
+        loadTableData(selectedEventId.value, selectedHour.value, false, false);
       }
       countdown.value = REFRESH_INTERVAL_SECONDS;
     }
@@ -250,8 +258,8 @@ onMounted(async () => {
 
 function onVisibilityChange() {
   if (!document.hidden && !isEventEnded() && countdown.value === REFRESH_INTERVAL_SECONDS) {
-    // Tab just became visible, trigger a refresh and reset countdown
-    countdown.value = 5; // quick refresh
+    // Tab just became visible, quick table refresh
+    countdown.value = 5;
   }
 }
 

@@ -70,6 +70,9 @@ def get_chart_series(event_id, interval='15m'):
     bucket_ms = 3600000 if interval == '1h' else 900000
     rows = repo.get_chart_history_aggregated(event_id, bucket_ms)
     if not rows:
+        # Fallback to chart_points table (populated by parse_and_store_event_data)
+        rows = repo.get_chart_history_aggregated_fallback(event_id, bucket_ms)
+    if not rows:
         return {}
 
     # SQL already aggregated: (uid, name, bucket_ts, pt), one row per uid per bucket
