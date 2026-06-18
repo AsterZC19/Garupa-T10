@@ -76,51 +76,10 @@ def upsert_event(event_id, name, event_type, start_at, end_at, banner_url=None, 
 
 def replace_scores(event_id, rows):
     event_id = str(event_id)
-    existing = {s.uid: s for s in Score.query.filter_by(event_id=event_id).all()}
-
-    new_by_uid = {str(r['uid']): r for r in rows}
-    new_uids = set(new_by_uid.keys())
-    existing_uids = set(existing.keys())
-
-    # Check if anything actually changed
-    if new_uids == existing_uids:
-        all_same = True
-        for uid, s in existing.items():
-            r = new_by_uid[uid]
-            if (s.pt != int(r.get('pt', 0)) or
-                s.rank != int(r.get('rank', 0)) or
-                s.name != str(r.get('name', '')) or
-                s.signature != str(r.get('signature', ''))):
-                all_same = False
-                break
-        if all_same:
-            return  # No changes, skip delete+insert
-
-    # Delete removed uids
-    removed = existing_uids - new_uids
-    if removed:
-        Score.query.filter(Score.event_id == event_id, Score.uid.in_(removed)).delete(synchronize_session=False)
-
-    # Upsert: update existing, insert new
-    for r in rows:
-        uid = str(r['uid'])
-        if uid in existing:
-            s = existing[uid]
-            s.name = r.get('name') or ''
-            s.pt = int(r.get('pt', 0))
-            s.rank = int(r.get('rank', 0))
-            s.signature = r.get('signature') or ''
-            s.updated_at = r.get('updated_at', s.updated_at)
-        else:
-            db.session.add(Score(
-                event_id=event_id,
-                uid=uid,
-                name=r.get('name') or '',
-                pt=int(r.get('pt', 0)),
-                rank=int(r.get('rank', 0)),
-                signature=r.get('signature') or '',
-                updated_at=r.get('updated_at', now_ms())
-            ))
+    # DELETE + bulk_insert is faster than row-by-row comparison in SQLite
+    Score.query.filter_by(event_id=event_id).delete()
+    if rows:
+        db.session.bulk_insert_mappings(Score, rows)
     db.session.commit()
 
 
@@ -173,6 +132,129 @@ def append_chart_points_if_missing(event_id, points, chunk_size=400):
     return changed
 
 
+def get_chart_data_cache(event_id, interval='15m'):
+    """Read pre-computed chart data from cache table — simple SELECT, no GROUP BY."""
+    try:
+        from models import ChartDataCache
+        rows = ChartDataCache.query.filter_by(
+            event_id=str(event_id),
+            bucket_interval=interval
+        ).order_by(ChartDataCache.bucket_ts.asc()).all()
+        return [(r.uid, r.name, r.bucket_ts, r.pt) for r in rows]
+    except Exception:
+        return []
+
+
+def _update_chart_data_cache(event_id, changed_items):
+    """Incrementally update chart_data_cache from newly inserted/updated history rows."""
+    if not changed_items:
+        return
+    try:
+        from models import ChartDataCache
+    except Exception:
+        return
+
+    event_id = str(event_id)
+    # Compute bucket entries for both intervals, keeping max pt per bucket
+    buckets = {}  # (uid, interval, bucket_ts) -> {'pt': max_pt, 'name': name}
+    for item in changed_items:
+        uid = str(item['uid'])
+        ts = item['timestamp']
+        pt = item['pt']
+        name = item.get('name') or uid
+
+        for interval, bucket_ms in [('15m', 900000), ('1h', 3600000)]:
+            bucket_ts = (ts // bucket_ms) * bucket_ms
+            key = (uid, interval, bucket_ts)
+            if key not in buckets or pt > buckets[key]['pt']:
+                buckets[key] = {'pt': pt, 'name': name}
+
+    # Fetch existing cache entries for the affected uids
+    affected_uids = list({k[0] for k in buckets})
+    try:
+        existing_rows = ChartDataCache.query.filter(
+            ChartDataCache.event_id == event_id,
+            ChartDataCache.uid.in_(affected_uids)
+        ).all()
+        existing = {(r.uid, r.bucket_interval, r.bucket_ts): r for r in existing_rows}
+    except Exception:
+        existing = {}
+
+    to_add = []
+    for (uid, interval, bucket_ts), data in buckets.items():
+        existing_row = existing.get((uid, interval, bucket_ts))
+        if existing_row:
+            if data['pt'] > existing_row.pt:
+                try:
+                    existing_row.pt = data['pt']
+                    existing_row.name = data['name']
+                except Exception:
+                    pass
+        else:
+            to_add.append(ChartDataCache(
+                event_id=event_id,
+                uid=uid,
+                bucket_interval=interval,
+                bucket_ts=bucket_ts,
+                pt=data['pt'],
+                name=data['name']
+            ))
+
+    if to_add:
+        try:
+            db.session.bulk_save_objects(to_add)
+        except Exception:
+            pass
+
+
+def backfill_chart_data_cache(event_id=None):
+    """Backfill chart_data_cache from player_score_history. Runs GROUP BY once per event."""
+    from models import ChartDataCache
+
+    if event_id:
+        events_to_process = [str(event_id)]
+    else:
+        events_to_process = sorted(get_event_ids_with_history())
+
+    total = 0
+    for eid in events_to_process:
+        # Clear existing cache for this event
+        ChartDataCache.query.filter_by(event_id=eid).delete()
+
+        for interval, bucket_ms in [('15m', 900000), ('1h', 3600000)]:
+            bucket_key = func.floor(PlayerScoreHistory.timestamp / bucket_ms).cast(Integer)
+            rows = db.session.query(
+                PlayerScoreHistory.uid,
+                func.max(PlayerScoreHistory.name).label('name'),
+                (bucket_key * bucket_ms).label('bucket_ts'),
+                func.max(PlayerScoreHistory.pt).label('pt')
+            ).filter_by(event_id=eid).group_by(
+                PlayerScoreHistory.uid,
+                bucket_key
+            ).all()
+
+            cache_rows = [
+                ChartDataCache(
+                    event_id=eid,
+                    uid=r.uid,
+                    bucket_interval=interval,
+                    bucket_ts=r.bucket_ts,
+                    pt=r.pt,
+                    name=r.name or r.uid
+                )
+                for r in rows
+            ]
+
+            for chunk in chunked(cache_rows, 400):
+                db.session.bulk_save_objects(chunk)
+                total += len(chunk)
+
+        db.session.commit()
+        print(f"Backfilled cache for event {eid}")
+
+    return total
+
+
 def append_player_score_history_if_missing(event_id, rows, batch_size=2000, chunk_size=400):
     if not rows:
         return 0
@@ -188,6 +270,7 @@ def append_player_score_history_if_missing(event_id, rows, batch_size=2000, chun
     existing = {(point.uid, point.timestamp): point for point in existing_points}
 
     changed = 0
+    changed_items = []
     batch = []
     for row in rows:
         key = (str(row['uid']), row['timestamp'])
@@ -198,6 +281,7 @@ def append_player_score_history_if_missing(event_id, rows, batch_size=2000, chun
                 existing_point.pt = row['pt']
                 existing_point.name = name
                 changed += 1
+                changed_items.append({'uid': key[0], 'timestamp': row['timestamp'], 'pt': row['pt'], 'name': name})
             continue
 
         new_point = PlayerScoreHistory(
@@ -209,6 +293,7 @@ def append_player_score_history_if_missing(event_id, rows, batch_size=2000, chun
         )
         existing[key] = new_point
         batch.append(new_point)
+        changed_items.append({'uid': key[0], 'timestamp': row['timestamp'], 'pt': row['pt'], 'name': name})
         if len(batch) >= batch_size:
             db.session.bulk_save_objects(batch)
             changed += len(batch)
@@ -217,6 +302,10 @@ def append_player_score_history_if_missing(event_id, rows, batch_size=2000, chun
     if batch:
         db.session.bulk_save_objects(batch)
         changed += len(batch)
+
+    # Incrementally update pre-computed chart cache from changed rows
+    _update_chart_data_cache(event_id, changed_items)
+
     if changed:
         db.session.commit()
     return changed

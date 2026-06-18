@@ -60,6 +60,16 @@ class PlayerDegree(db.Model):
 
     __table_args__ = (db.Index('ix_player_degrees_uid_event_id', "uid", "event_id"), )
 
+class ChartDataCache(db.Model):
+    __tablename__ = 'chart_data_cache'
+    event_id = db.Column(db.String, primary_key=True)
+    uid = db.Column(db.String, primary_key=True)
+    bucket_interval = db.Column(db.String, primary_key=True)  # '15m' or '1h'
+    bucket_ts = db.Column(db.Integer, primary_key=True)  # ms
+    pt = db.Column(db.Integer)
+    name = db.Column(db.String)
+
+
 class PlayerScoreHistory(db.Model):
     __tablename__ = 'player_score_history'
     id = db.Column(db.Integer, primary_key=True)

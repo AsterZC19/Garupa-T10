@@ -67,10 +67,16 @@ def get_chart_series(event_id, interval='15m'):
     if cached is not None:
         return cached
 
-    bucket_ms = 3600000 if interval == '1h' else 900000
-    rows = repo.get_chart_history_aggregated(event_id, bucket_ms)
+    # Try pre-computed cache first — simple SELECT, no GROUP BY
+    rows = repo.get_chart_data_cache(event_id, interval)
+
+    # Fallback to live GROUP BY if cache is empty (not yet backfilled)
     if not rows:
-        # Fallback to chart_points table (populated by parse_and_store_event_data)
+        bucket_ms = 3600000 if interval == '1h' else 900000
+        rows = repo.get_chart_history_aggregated(event_id, bucket_ms)
+    if not rows:
+        # Final fallback to chart_points table
+        bucket_ms = 3600000 if interval == '1h' else 900000
         rows = repo.get_chart_history_aggregated_fallback(event_id, bucket_ms)
     if not rows:
         return {}
