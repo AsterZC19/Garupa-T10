@@ -215,17 +215,15 @@ def init_scheduler(app):
     now = datetime.now()
     next_minute = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
     next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+    startup_delay = now + timedelta(seconds=3)
 
     scheduler.add_job(discover_new_events, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='default', max_instances=1)
     scheduler.add_job(update_t10_achievements, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='default', max_instances=1)
     scheduler.add_job(record_top_10_scores, 'interval', args=[app], minutes=1, start_date=next_minute, misfire_grace_time=60, executor='priority', max_instances=1)
     scheduler.add_job(backfill_all_events_history, 'date', args=[app], run_date=next_minute, misfire_grace_time=300, executor='default', max_instances=1)
+    # Immediate startup jobs (non-blocking, run 3s after scheduler starts)
+    scheduler.add_job(discover_new_events, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='default', max_instances=1)
+    scheduler.add_job(update_t10_achievements, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='default', max_instances=1)
 
     scheduler.start()
-    logging.info("Scheduler started. Jobs aligned to start at the top of the minute/hour.")
-
-    with app.app_context():
-        logging.info("Running startup jobs synchronously...")
-        discover_new_events(app)
-        update_t10_achievements(app)
-        logging.info("Startup jobs finished.")
+    logging.info("Scheduler started. Startup jobs scheduled to run immediately.")

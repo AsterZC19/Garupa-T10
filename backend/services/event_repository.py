@@ -75,9 +75,52 @@ def upsert_event(event_id, name, event_type, start_at, end_at, banner_url=None, 
 
 
 def replace_scores(event_id, rows):
-    Score.query.filter_by(event_id=str(event_id)).delete()
-    if rows:
-        db.session.bulk_insert_mappings(Score, rows)
+    event_id = str(event_id)
+    existing = {s.uid: s for s in Score.query.filter_by(event_id=event_id).all()}
+
+    new_by_uid = {str(r['uid']): r for r in rows}
+    new_uids = set(new_by_uid.keys())
+    existing_uids = set(existing.keys())
+
+    # Check if anything actually changed
+    if new_uids == existing_uids:
+        all_same = True
+        for uid, s in existing.items():
+            r = new_by_uid[uid]
+            if (s.pt != int(r.get('pt', 0)) or
+                s.rank != int(r.get('rank', 0)) or
+                s.name != str(r.get('name', '')) or
+                s.signature != str(r.get('signature', ''))):
+                all_same = False
+                break
+        if all_same:
+            return  # No changes, skip delete+insert
+
+    # Delete removed uids
+    removed = existing_uids - new_uids
+    if removed:
+        Score.query.filter(Score.event_id == event_id, Score.uid.in_(removed)).delete(synchronize_session=False)
+
+    # Upsert: update existing, insert new
+    for r in rows:
+        uid = str(r['uid'])
+        if uid in existing:
+            s = existing[uid]
+            s.name = r.get('name') or ''
+            s.pt = int(r.get('pt', 0))
+            s.rank = int(r.get('rank', 0))
+            s.signature = r.get('signature') or ''
+            s.updated_at = r.get('updated_at', s.updated_at)
+        else:
+            db.session.add(Score(
+                event_id=event_id,
+                uid=uid,
+                name=r.get('name') or '',
+                pt=int(r.get('pt', 0)),
+                rank=int(r.get('rank', 0)),
+                signature=r.get('signature') or '',
+                updated_at=r.get('updated_at', now_ms())
+            ))
     db.session.commit()
 
 

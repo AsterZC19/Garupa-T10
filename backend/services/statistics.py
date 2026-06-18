@@ -1,20 +1,17 @@
 # backend/services/statistics.py
+import bisect
 from models import PlayerScoreHistory, Event
 from collections import defaultdict
 from services.ttl_cache import TTLCache
+from datetime import datetime
 
-hourly_stats_cache = TTLCache(60)
+hourly_stats_cache = TTLCache(300)  # 5-minute cache for active events
+hourly_stats_cache_ended = TTLCache(3600)  # 1-hour cache for ended events
 
-def find_closest_point(scores, target_ts):
-    """Finds the score point closest to a target timestamp."""
-    if not scores:
-        return None
-    return min(scores, key=lambda s: abs(s[0] - target_ts))
-
-def find_last_point_before(scores, target_ts):
-    """Finds the last score point strictly before a target timestamp."""
-    relevant_scores = [s for s in scores if s[0] < target_ts]
-    return relevant_scores[-1] if relevant_scores else None
+def _find_index_le(timestamps, target):
+    """Return index of rightmost value <= target, or -1 if all > target."""
+    i = bisect.bisect_right(timestamps, target) - 1
+    return i
 
 def calculate_hourly_stats(event_id):
     """
@@ -23,7 +20,11 @@ def calculate_hourly_stats(event_id):
     - 周回次数 (run_count): Number of times the score changes for a player in an hour.
     - 平均PT (average_pt): hourly_speed / run_count.
     """
-    cached = hourly_stats_cache.get(str(event_id))
+    event_id_str = str(event_id)
+    cached = hourly_stats_cache.get(event_id_str)
+    if cached is not None:
+        return cached
+    cached = hourly_stats_cache_ended.get(event_id_str)
     if cached is not None:
         return cached
 
@@ -44,59 +45,53 @@ def calculate_hourly_stats(event_id):
     for uid, timestamp, pt in history:
         scores_by_uid[uid].append((timestamp, pt))
 
-    # Determine the range of hours to generate stats for
+    # Determine the range of hours
     min_ts = history[0].timestamp
     max_ts = history[-1].timestamp
     start_hour_ts = (min_ts // 3600000) * 3600000
     end_hour_ts = (max_ts // 3600000) * 3600000
-    
-    all_uids = list(scores_by_uid.keys())
-    hourly_stats = []
 
-    # Iterate through each hour from the start to the end of the event data
+    # Pre-compute per-user arrays with separate timestamp/pt lists for bisect
+    user_arrays = {}
+    for uid, scores in scores_by_uid.items():
+        timestamps = [s[0] for s in scores]
+        pts = [s[1] for s in scores]
+        user_arrays[uid] = (timestamps, pts)
+
+    hourly_stats = []
     current_hour_ts = start_hour_ts
     while current_hour_ts <= end_hour_ts:
         next_hour_ts = current_hour_ts + 3600000
-        
         total_hourly_speed = 0
         total_run_count = 0
 
-        for uid in all_uids:
-            player_scores = scores_by_uid[uid]
-
-            # --- 1. Calculate Hourly Speed (时速) ---
-            start_point = find_closest_point(player_scores, current_hour_ts)
-            end_point = find_closest_point(player_scores, next_hour_ts)
-
-            if start_point and end_point and start_point[0] < end_point[0]:
-                speed = end_point[1] - start_point[1]
+        for uid, (timestamps, pts) in user_arrays.items():
+            # --- 1. Hourly Speed ---
+            si = _find_index_le(timestamps, current_hour_ts)
+            ei = _find_index_le(timestamps, next_hour_ts)
+            if si >= 0 and ei > si:
+                speed = pts[ei] - pts[si]
                 if speed > 0:
                     total_hourly_speed += speed
 
-            # --- 2. Calculate Run Count (周回次数) ---
-            scores_in_hour = [s for s in player_scores if current_hour_ts <= s[0] < next_hour_ts]
-            if not scores_in_hour:
+            # --- 2. Run Count ---
+            # Find indices bounding the hour window
+            first_in = bisect.bisect_left(timestamps, current_hour_ts)
+            last_in = _find_index_le(timestamps, next_hour_ts - 1)
+            if last_in < first_in:
                 continue
 
-            # Find the last score from before this hour to establish a baseline PT
-            last_score_before_hour = find_last_point_before(player_scores, current_hour_ts)
-            
-            # If no score before, use the first score of the hour as the baseline
-            last_pt = last_score_before_hour[1] if last_score_before_hour else scores_in_hour[0][1]
-            
+            last_pt = pts[first_in - 1] if first_in > 0 else pts[first_in]
             run_count = 0
-            # Count score increases within the hour
-            for _, pt in sorted(scores_in_hour): # Ensure they are in order
-                if pt > last_pt:
+            for i in range(first_in, last_in + 1):
+                if pts[i] > last_pt:
                     run_count += 1
-                last_pt = pt
-            
+                last_pt = pts[i]
             total_run_count += run_count
 
-        # --- 3. Calculate Average PT (平均PT) ---
+        # --- 3. Average PT ---
         average_pt = (total_hourly_speed // total_run_count) if total_run_count > 0 else 0
 
-        # Only add stats if there was activity
         if total_hourly_speed > 0 or total_run_count > 0:
             hourly_stats.append({
                 "hour_timestamp": current_hour_ts,
@@ -104,7 +99,13 @@ def calculate_hourly_stats(event_id):
                 "run_count": total_run_count if total_run_count > 0 else '-',
                 "average_pt": average_pt if total_run_count > 0 else '-'
             })
-        
+
         current_hour_ts = next_hour_ts
 
-    return hourly_stats_cache.set(str(event_id), sorted(hourly_stats, key=lambda x: x['hour_timestamp']))
+    result = sorted(hourly_stats, key=lambda x: x['hour_timestamp'])
+
+    # Use longer cache for ended events
+    now_ms = int(datetime.utcnow().timestamp() * 1000)
+    if event.end_at > 0 and now_ms > event.end_at + 2 * 24 * 3600 * 1000:
+        return hourly_stats_cache_ended.set(event_id_str, result)
+    return hourly_stats_cache.set(event_id_str, result)

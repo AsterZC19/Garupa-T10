@@ -37,6 +37,8 @@ const props = defineProps({
 const canvasRef = ref(null)
 const controlsRef = ref(null)
 let chart = null
+let lastEventId = null
+const MAX_POINTS_PER_DATASET = 500
 
 function hideAll() {
   if (!chart) return;
@@ -95,35 +97,72 @@ const colorPalette = [
   '#BA55D3'  // Medium Orchid
 ];
 
-const draw = () => {
-  if (!canvasRef.value || !props.currentEvent) return
-  if (chart) {
-    chart.destroy()
+function downsamplePoints(points, maxPoints) {
+  if (!points || points.length <= maxPoints) return points
+  const result = [points[0]]
+  const inner = points.slice(1, -1)
+  const bucketSize = Math.max(1, Math.floor(inner.length / (maxPoints - 2)))
+  for (let i = 0; i < inner.length; i += bucketSize) {
+    let best = inner[i]
+    for (let j = i + 1; j < i + bucketSize && j < inner.length; j++) {
+      if (inner[j].pt > best.pt) best = inner[j]
+    }
+    result.push(best)
   }
+  result.push(points[points.length - 1])
+  return result
+}
 
-  const datasets = props.series ? Object.keys(props.series).map((uid, index) => {
-    const userSeries = props.series[uid]
-    const color = colorPalette[index % colorPalette.length];
+function buildDatasets(series, event) {
+  if (!series) return []
+  return Object.keys(series).map((uid, index) => {
+    const userSeries = series[uid]
+    const color = colorPalette[index % colorPalette.length]
+    const rawPoints = userSeries.points || []
+    const sampled = downsamplePoints(rawPoints, MAX_POINTS_PER_DATASET)
     return {
       label: userSeries.name || uid,
-      data: userSeries.points.map(p => ({ x: p.t, y: p.pt })),
+      data: sampled.map(p => ({ x: p.t, y: p.pt })),
       tension: 0.1,
-      pointRadius: 1, // Make points smaller
-      pointHoverRadius: 4, // Enlarge points on hover
+      pointRadius: 1,
+      pointHoverRadius: 4,
       borderWidth: 2,
       borderColor: color,
-      backgroundColor: color + '33' // Add some transparency to the fill/point color
+      backgroundColor: color + '33'
     }
-  }) : []
+  })
+}
+
+const draw = () => {
+  if (!canvasRef.value || !props.currentEvent) return
+
+  const currentEventId = props.currentEvent.event_id
+  const eventChanged = currentEventId !== lastEventId
+  const datasets = buildDatasets(props.series, props.currentEvent)
+
+  if (chart && !eventChanged) {
+    // Same event, just update data in place
+    chart.data.datasets = datasets
+    chart.update('none')
+    return
+  }
+
+  // Event changed or first render: full recreate needed
+  if (chart) {
+    chart.destroy()
+    chart = null
+  }
+
+  // Don't create chart until we have actual data
+  if (datasets.length === 0) return
 
   chart = new Chart(canvasRef.value.getContext('2d'), {
     type: 'line',
-    data: {
-      datasets
-    },
+    data: { datasets },
     options: {
-      maintainAspectRatio: false, // 不维持固定宽高比
-      responsive: true,  // 保持响应式
+      maintainAspectRatio: false,
+      responsive: true,
+      animation: false,  // Disable animations for performance
       interaction: {
         mode: 'nearest',
         intersect: false
@@ -134,7 +173,7 @@ const draw = () => {
           fullSize: true,
           labels: {
             boxWidth: 12,
-            font: { size: 12 } // 调小字体
+            font: { size: 12 }
           }
         },
         zoom: {
@@ -145,7 +184,6 @@ const draw = () => {
             },
             y: {
               min: 0,
-              // max is set dynamically below
             }
           },
           pan: {
@@ -153,15 +191,9 @@ const draw = () => {
             mode: 'xy',
           },
           zoom: {
-            wheel: {
-              enabled: false,
-            },
-            drag: {
-              enabled: false,
-            },
-            pinch: {
-              enabled: false,
-            },
+            wheel: { enabled: false },
+            drag: { enabled: false },
+            pinch: { enabled: false },
             mode: 'xy',
           }
         }
@@ -191,15 +223,17 @@ const draw = () => {
     }
   });
 
-  const calculatedMaxY = chart.scales.y.max;
-  chart.options.scales.y.max = calculatedMaxY;
-  chart.options.plugins.zoom.limits.y.max = calculatedMaxY;
-  chart.update();
+  lastEventId = currentEventId
+
+  const calculatedMaxY = chart.scales.y.max
+  chart.options.scales.y.max = calculatedMaxY
+  chart.options.plugins.zoom.limits.y.max = calculatedMaxY
+  chart.update('none')
 
   // Position controls inside the chart area
   if (controlsRef.value && chart.chartArea) {
-    controlsRef.value.style.left = `${chart.chartArea.left + 0}px`;
-    controlsRef.value.style.top = `${chart.chartArea.top + 40}px`;
+    controlsRef.value.style.left = `${chart.chartArea.left + 0}px`
+    controlsRef.value.style.top = `${chart.chartArea.top + 40}px`
   }
 }
 
@@ -211,5 +245,7 @@ onBeforeUnmount(() => {
   }
 })
 
-watch(() => [props.series, props.currentEvent], draw, { deep: true })
+// Shallow watch - only triggers when object references change
+watch(() => props.series, draw)
+watch(() => props.currentEvent, draw)
 </script>

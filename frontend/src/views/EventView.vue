@@ -78,7 +78,6 @@ const selectedEventId = ref(null)
 const selectedHour = ref(null)
 const currentEvent = ref(null)
 const isCurrent = ref(true)
-const scores = ref([])
 const topPlayers = ref([])
 const chartSeries = ref({})
 const lastTopPlayersContext = ref(null)
@@ -136,14 +135,12 @@ async function loadEventData(eid, hour, force = false) {
 
     // Load top players first because it may refresh the stored table/history data.
     const topPlayersRes = await api.get(`/api/events/${eid}/top_players?${topPlayersParams.toString()}`)
-    const scoresRes = await api.get(`/api/events/${eid}/scores?limit=50&${params.toString()}`)
-    
+
     const contextKey = `${eid}-${hour ?? 'latest'}`
     const previousPts = lastTopPlayersContext.value === contextKey
       ? new Map(topPlayers.value.map(player => [player.uid, player.pt]))
       : new Map()
 
-    scores.value = scoresRes.data
     topPlayers.value = topPlayersRes.data.map(player => {
       const previousPt = previousPts.get(player.uid)
       const ptIncrease = typeof player.pt === 'number' && typeof previousPt === 'number'
@@ -162,7 +159,6 @@ async function loadEventData(eid, hour, force = false) {
 
   } catch (error) {
     console.error('获取活动数据失败:', error)
-    scores.value = []
     chartSeries.value = {}
     topPlayers.value = []
   } finally {
@@ -205,6 +201,12 @@ watch(() => route.params.eventId, (newId) => {
   }
 }, { immediate: true });
 
+function isEventEnded() {
+  if (!currentEvent.value) return true
+  const now = Date.now()
+  return now > currentEvent.value.end_at + 3600000 // ended >1 hour ago
+}
+
 onMounted(async () => {
   const eventList = await loadEventsList();
   if (!route.params.eventId) {
@@ -226,19 +228,42 @@ onMounted(async () => {
   countdown.value = REFRESH_INTERVAL_SECONDS;
   refreshInterval.value = setInterval(() => {
     if (isRefreshing.value) return;
+    // Pause refresh when tab is hidden
+    if (document.hidden) return;
 
     if (countdown.value > 0) {
       countdown.value--;
     } else {
-      forceRefresh();
+      // Only auto-refresh if event is still active
+      if (!isEventEnded()) {
+        forceRefresh();
+      }
+      countdown.value = REFRESH_INTERVAL_SECONDS;
     }
   }, 1000);
+
+  // Use shorter interval when event is active (burst mode for the first 10s)
+  if (!isEventEnded()) {
+    countdown.value = 10; // Initial quick refresh
+  }
 })
+
+function onVisibilityChange() {
+  if (!document.hidden && !isEventEnded() && countdown.value === REFRESH_INTERVAL_SECONDS) {
+    // Tab just became visible, trigger a refresh and reset countdown
+    countdown.value = 5; // quick refresh
+  }
+}
+
+// Separate visibility listener - need to add/remove manually since we're in setup
+const visHandler = () => onVisibilityChange()
+document.addEventListener('visibilitychange', visHandler)
 
 onUnmounted(() => {
   if (refreshInterval.value) {
     clearInterval(refreshInterval.value);
   }
+  document.removeEventListener('visibilitychange', visHandler)
 })
 
 function eventTypeZh(type) {

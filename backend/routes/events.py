@@ -18,6 +18,16 @@ events_bp = Blueprint('events', __name__)
 _last_refresh_time = {}
 _last_top_players_refresh_time = {}
 REFRESH_COOLDOWN = 30  # 30 seconds
+MAX_CACHED_REFRESH_TIMES = 50
+
+
+def _cleanup_refresh_times():
+    """Remove oldest entries to prevent unbounded growth."""
+    for d in (_last_refresh_time, _last_top_players_refresh_time):
+        if len(d) > MAX_CACHED_REFRESH_TIMES * 2:
+            sorted_keys = sorted(d.keys(), key=lambda k: d[k])
+            for k in sorted_keys[:-MAX_CACHED_REFRESH_TIMES]:
+                d.pop(k, None)
 
 @events_bp.route('/', methods=['GET'])
 def list_events():
@@ -25,6 +35,7 @@ def list_events():
 
 @events_bp.route('/<string:event_id>', methods=['GET'])
 def get_event(event_id):
+    _cleanup_refresh_times()
     e = find_event(event_id)
 
     # Refresh data if it's missing, forced, or older than 15 minutes

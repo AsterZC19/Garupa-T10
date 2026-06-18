@@ -323,10 +323,39 @@ import CardIcon from '../components/CardIcon.vue';
 
 const allDegreesData = ref(null);
 
+const DEGREES_CACHE_KEY = 't10_degrees_cache'
+const DEGREES_CACHE_TTL = 24 * 3600 * 1000 // 24 hours
+
+function loadDegreesFromCache() {
+  try {
+    const cached = sessionStorage.getItem(DEGREES_CACHE_KEY)
+    if (cached) {
+      const { data, ts } = JSON.parse(cached)
+      if (Date.now() - ts < DEGREES_CACHE_TTL) {
+        return data
+      }
+    }
+  } catch (e) { /* ignore parse errors */ }
+  return null
+}
+
+function saveDegreesToCache(data) {
+  try {
+    sessionStorage.setItem(DEGREES_CACHE_KEY, JSON.stringify({ data, ts: Date.now() }))
+  } catch (e) { /* ignore storage full */ }
+}
+
 onMounted(async () => {
+  const cached = loadDegreesFromCache()
+  if (cached) {
+    allDegreesData.value = cached
+    return
+  }
   try {
     const response = await fetch('/api/degrees/all.3.json');
-    allDegreesData.value = await response.json();
+    const data = await response.json()
+    allDegreesData.value = data
+    saveDegreesToCache(data)
   } catch (error) {
     console.error('Failed to fetch degrees data:', error);
   }

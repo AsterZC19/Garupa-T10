@@ -4,12 +4,15 @@ from services import event_repository as repo
 from services.ttl_cache import TTLCache
 
 
-chart_cache = TTLCache(60)
+chart_cache = TTLCache(120)
+chart_cache_ended = TTLCache(3600)  # 1 hour for long-ended events
 top_players_cache = TTLCache(60)
+MAX_CHART_POINTS_PER_SERIES = 300
 
 
 def clear_event_query_cache():
     chart_cache.clear()
+    chart_cache_ended.clear()
     top_players_cache.clear()
 
 
@@ -19,6 +22,29 @@ def row_timestamp(row):
 
 def row_pt(row):
     return row.pt
+
+
+def _downsample_points(points, max_points):
+    """Downsample a sorted list of {t, pt} dicts to at most max_points, preserving peaks."""
+    if len(points) <= max_points:
+        return points
+
+    result = [points[0]]
+    remaining_slots = max_points - 2  # reserve for first and last
+    if remaining_slots <= 0:
+        result.append(points[-1])
+        return result
+
+    inner = points[1:-1]
+    bucket_size = max(1, len(inner) // remaining_slots)
+
+    for i in range(0, len(inner), bucket_size):
+        bucket = inner[i:i + bucket_size]
+        # pick the point with the highest pt in each bucket to preserve peaks
+        result.append(max(bucket, key=lambda p: p['pt']))
+
+    result.append(points[-1])
+    return result
 
 
 def find_closest_point(scores, target_ts):
@@ -35,6 +61,9 @@ def find_last_point_before(scores, target_ts):
 def get_chart_series(event_id, interval='15m'):
     cache_key = (str(event_id), interval)
     cached = chart_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    cached = chart_cache_ended.get(cache_key)
     if cached is not None:
         return cached
 
@@ -60,8 +89,14 @@ def get_chart_series(event_id, interval='15m'):
             continue
 
         sampled_points = sorted(bucketed_points.values(), key=lambda point: point['t'])
+        sampled_points = _downsample_points(sampled_points, MAX_CHART_POINTS_PER_SERIES)
         series[uid] = {'name': name_map.get(uid, uid), 'points': sampled_points}
 
+    # Use longer effective cache for ended events
+    event = repo.get_event(event_id)
+    now_ms = int(datetime.utcnow().timestamp() * 1000)
+    if event and event.end_at > 0 and now_ms > event.end_at + 24 * 3600 * 1000:
+        return chart_cache_ended.set(cache_key, series)
     return chart_cache.set(cache_key, series)
 
 

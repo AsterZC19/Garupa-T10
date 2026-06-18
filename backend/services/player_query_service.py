@@ -10,17 +10,18 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLAYER_DB_PATH = os.path.join(BASE_DIR, 'players.db')
 
 player_cache = TTLCache(60)
-card_cache = {}
+card_cache = TTLCache(3600)  # 1 hour TTL, bounded
 characters_cache = TTLCache(24 * 3600)
 area_items_cache = TTLCache(24 * 3600)
 
 
 def get_card_data(card_id):
-    if card_id in card_cache:
-        return card_cache[card_id]
+    cached = card_cache.get(card_id)
+    if cached is not None:
+        return cached
     data = client.get_card(card_id)
     if data:
-        card_cache[card_id] = data
+        card_cache.set(card_id, data)
     return data
 
 
