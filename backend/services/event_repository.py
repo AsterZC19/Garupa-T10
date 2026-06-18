@@ -19,8 +19,8 @@ def serialize_event(event):
     }
 
 
-def list_events():
-    return Event.query.order_by(Event.start_at.desc()).all()
+def list_events(limit=100):
+    return Event.query.order_by(Event.start_at.desc()).limit(limit).all()
 
 
 def get_event(event_id):
@@ -238,6 +238,20 @@ def get_chart_history(event_id, start_ts=None, end_ts=None):
     if end_ts is not None:
         query = query.filter(PlayerScoreHistory.timestamp <= end_ts)
     return query.order_by(PlayerScoreHistory.timestamp.asc()).all()
+
+
+def get_chart_history_aggregated(event_id, bucket_ms):
+    """Return chart data aggregated into time buckets in SQL, drastically reducing row count."""
+    bucket_key = func.floor(PlayerScoreHistory.timestamp / bucket_ms).cast(Integer)
+    return db.session.query(
+        PlayerScoreHistory.uid,
+        func.max(PlayerScoreHistory.name).label('name'),
+        (bucket_key * bucket_ms).label('bucket_ts'),
+        func.max(PlayerScoreHistory.pt).label('pt')
+    ).filter_by(event_id=str(event_id)).group_by(
+        PlayerScoreHistory.uid,
+        bucket_key
+    ).order_by('bucket_ts').all()
 
 
 def get_top_scores(event_id, limit):

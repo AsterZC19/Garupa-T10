@@ -31,7 +31,8 @@ def _cleanup_refresh_times():
 
 @events_bp.route('/', methods=['GET'])
 def list_events():
-    return jsonify([serialize_event(event) for event in find_events()])
+    limit = int(request.args.get('limit', 100))
+    return jsonify([serialize_event(event) for event in find_events(limit)])
 
 @events_bp.route('/<string:event_id>', methods=['GET'])
 def get_event(event_id):

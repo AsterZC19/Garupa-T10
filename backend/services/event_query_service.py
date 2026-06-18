@@ -67,30 +67,23 @@ def get_chart_series(event_id, interval='15m'):
     if cached is not None:
         return cached
 
-    rows = repo.get_chart_history(event_id)
+    bucket_ms = 3600000 if interval == '1h' else 900000
+    rows = repo.get_chart_history_aggregated(event_id, bucket_ms)
     if not rows:
         return {}
 
+    # SQL already aggregated: (uid, name, bucket_ts, pt), one row per uid per bucket
+    user_points = defaultdict(list)
     name_map = {}
-    user_points_raw = defaultdict(list)
-    for uid, name, timestamp, pt in rows:
-        name_map[uid] = name
-        user_points_raw[uid].append((timestamp, pt))
+    for uid, name, bucket_ts, pt in rows:
+        name_map[uid] = name or uid
+        user_points[uid].append({'t': bucket_ts, 'pt': pt})
 
-    bucket_ms = 3600000 if interval == '1h' else 900000
     series = {}
-    for uid, points_list in user_points_raw.items():
-        bucketed_points = {}
-        for timestamp, pt in points_list:
-            bucket_key = timestamp // bucket_ms
-            bucketed_points[bucket_key] = {'t': timestamp, 'pt': pt}
-
-        if not bucketed_points:
-            continue
-
-        sampled_points = sorted(bucketed_points.values(), key=lambda point: point['t'])
-        sampled_points = _downsample_points(sampled_points, MAX_CHART_POINTS_PER_SERIES)
-        series[uid] = {'name': name_map.get(uid, uid), 'points': sampled_points}
+    for uid, points_list in user_points.items():
+        points_list.sort(key=lambda p: p['t'])
+        sampled = _downsample_points(points_list, MAX_CHART_POINTS_PER_SERIES)
+        series[uid] = {'name': name_map.get(uid, uid), 'points': sampled}
 
     # Use longer effective cache for ended events
     event = repo.get_event(event_id)
