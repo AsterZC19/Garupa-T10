@@ -62,7 +62,7 @@ def _bg_refresh_top_players(app, event_id, interval):
 
 @events_bp.route('/', methods=['GET'])
 def list_events():
-    limit = int(request.args.get('limit', 100))
+    limit = int(request.args.get('limit', 1000))
     return jsonify([serialize_event(event) for event in find_events(limit)])
 
 @events_bp.route('/<string:event_id>', methods=['GET'])

@@ -67,19 +67,30 @@ def get_chart_series(event_id, interval='15m'):
     if cached is not None:
         return cached
 
+    event = repo.get_event(event_id)
+    now_ms = int(datetime.utcnow().timestamp() * 1000)
+    is_old_event = (
+        event and event.end_at > 0
+        and now_ms > event.end_at + 24 * 3600 * 1000
+    )
+
     # Try pre-computed cache first — simple SELECT, no GROUP BY
     rows = repo.get_chart_data_cache(event_id, interval)
 
-    # Fallback to live GROUP BY if cache is empty (not yet backfilled)
     if not rows:
+        if is_old_event:
+            # Cache wasn't built for this pruned event — return empty rather than
+            # falling back to incomplete player_score_history data
+            return {}
+
+        # Fallback to live GROUP BY if cache is empty (not yet backfilled)
         bucket_ms = 3600000 if interval == '1h' else 900000
         rows = repo.get_chart_history_aggregated(event_id, bucket_ms)
-    if not rows:
-        # Final fallback to chart_points table
-        bucket_ms = 3600000 if interval == '1h' else 900000
-        rows = repo.get_chart_history_aggregated_fallback(event_id, bucket_ms)
-    if not rows:
-        return {}
+        if not rows:
+            # Final fallback to chart_points table
+            rows = repo.get_chart_history_aggregated_fallback(event_id, bucket_ms)
+        if not rows:
+            return {}
 
     # SQL already aggregated: (uid, name, bucket_ts, pt), one row per uid per bucket
     user_points = defaultdict(list)
@@ -94,10 +105,8 @@ def get_chart_series(event_id, interval='15m'):
         sampled = _downsample_points(points_list, MAX_CHART_POINTS_PER_SERIES)
         series[uid] = {'name': name_map.get(uid, uid), 'points': sampled}
 
-    # Use longer effective cache for ended events
-    event = repo.get_event(event_id)
-    now_ms = int(datetime.utcnow().timestamp() * 1000)
-    if event and event.end_at > 0 and now_ms > event.end_at + 24 * 3600 * 1000:
+    # Use longer TTL cache for ended events
+    if is_old_event:
         return chart_cache_ended.set(cache_key, series)
     return chart_cache.set(cache_key, series)
 

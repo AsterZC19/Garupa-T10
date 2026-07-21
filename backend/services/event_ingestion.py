@@ -107,12 +107,6 @@ def compute_speeds_and_store(event_id, top_json):
     users = top_json.get('users', [])
     latest_by_uid = latest_points_by_uid(points)
 
-    chart_rows = [
-        {'uid': str(point.get('uid')), 'timestamp': int(point.get('time')), 'pt': int(point.get('value', 0))}
-        for point in keep_latest_point_per_minute(points)
-    ]
-    repo.append_chart_points_if_missing(event_id, chart_rows)
-
     event = repo.get_event(event_id)
     if not event:
         print(f"[Error] compute_speeds_and_store: Event {event_id} not found in DB.")
@@ -214,13 +208,7 @@ def refresh_event_top_data(event_id, server='jp', interval=TOP_PLAYERS_INTERVAL_
     # --- Single pass over all points: bucket + latest-per-uid ---
     bucketed_points, latest_by_uid = _process_points_single_pass(points)
 
-    # --- Chart rows (from bucketed points) ---
-    chart_rows = [
-        {'uid': p['uid'], 'timestamp': p['time'], 'pt': int(p.get('value', 0))}
-        for p in bucketed_points
-    ]
     min_ts = _last_stored_ts.get(str(event_id), 0)
-    repo.append_chart_points_if_missing(event_id, chart_rows, min_timestamp=min_ts)
 
     # --- Score rows (from users or latest_by_uid) ---
     event = repo.get_event(event_id)

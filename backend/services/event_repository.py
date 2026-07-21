@@ -19,7 +19,7 @@ def serialize_event(event):
     }
 
 
-def list_events(limit=100):
+def list_events(limit=1000):
     return Event.query.order_by(Event.start_at.desc()).limit(limit).all()
 
 
