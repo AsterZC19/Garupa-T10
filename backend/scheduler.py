@@ -5,10 +5,12 @@ from datetime import datetime, timedelta
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import Integer, cast
-from models import db, Event, Score, PlayerDegree, AppState
+from models import db, Event, Score, PlayerDegree, AppState, PlayerScoreHistory, ChartPoint
 from services.bestdori_client import client
 from services.event_ingestion import backfill_event_history, parse_and_store_event_data, record_active_event_top_10
-from services.event_repository import get_all_event_ids, get_event_ids_with_history
+from services.event_repository import get_all_event_ids, get_event_ids_with_history, backfill_chart_data_cache
+
+KEEP_MINUTES = 30  # minutes of per-minute data to keep per ended event
 
 logging.basicConfig(level=logging.INFO)
 
@@ -125,6 +127,9 @@ def update_t10_achievements(app):
                                 degree_id=degree_id
                             ))
 
+                # --- Prune this event's data now that it has ended ---
+                _prune_event_data(event, app)
+
                 max_processed_id = max(max_processed_id, int(event.event_id))
 
             last_processed_event_state.value = str(max_processed_id)
@@ -202,6 +207,53 @@ def backfill_all_events_history(app):
         except Exception as e:
             logging.error(f"An error occurred in backfill_all_events_history: {e}", exc_info=True)
             db.session.rollback()
+
+
+def _prune_event_data(event, app):
+    """
+    After an event ends: backfill its chart_data_cache, then prune raw per-minute
+    history (keep only last N minutes) and clean up legacy chart_points.
+    """
+    eid = event.event_id
+    try:
+        # 1. Backfill chart cache for this event so charts don't need raw history
+        logging.info(f"Prune: Backfilling chart cache for event {eid}...")
+        backfill_chart_data_cache(event_id=eid)
+
+        # 2. Prune player_score_history: keep only last KEEP_MINUTES
+        cutoff_ms = KEEP_MINUTES * 60 * 1000
+        keep_threshold = event.end_at - cutoff_ms
+        batch_size = 10000
+        deleted = 0
+        while True:
+            subquery = PlayerScoreHistory.query.with_entities(
+                PlayerScoreHistory.id
+            ).filter(
+                PlayerScoreHistory.event_id == eid,
+                PlayerScoreHistory.timestamp < keep_threshold
+            ).limit(batch_size).subquery()
+
+            result = db.session.execute(
+                PlayerScoreHistory.__table__.delete().where(
+                    PlayerScoreHistory.id.in_(subquery)
+                )
+            )
+            db.session.commit()
+            if result.rowcount == 0:
+                break
+            deleted += result.rowcount
+        logging.info(f"Prune: Deleted {deleted:,} history rows for event {eid} "
+                      f"(kept last {KEEP_MINUTES}min).")
+
+        # 3. Clean up legacy chart_points for this event
+        cp = ChartPoint.query.filter_by(event_id=eid).delete()
+        db.session.commit()
+        if cp:
+            logging.info(f"Prune: Deleted {cp:,} chart_points rows for event {eid}.")
+
+    except Exception as e:
+        logging.error(f"Prune: Failed for event {eid}: {e}", exc_info=True)
+        db.session.rollback()
 
 
 def init_scheduler(app):
