@@ -7,7 +7,7 @@ from services.event_ingestion import TOP_PLAYERS_INTERVAL_MS, parse_and_store_ev
 from services.event_query_service import (
     clear_event_query_cache,
     get_chart_series,
-    get_heatmap,
+    get_heatmap_live,
     get_top_players as get_top_players_data,
 )
 from services.event_repository import (
@@ -184,10 +184,13 @@ def get_top_players(event_id):
 
 @events_bp.route('/<string:event_id>/heatmap', methods=['GET'])
 def get_heatmap_route(event_id):
-    """top N 玩家的 48h 活跃热力图（每位玩家一行展示）。"""
+    """top N 玩家的 48h 活跃热力图（直接调 Bestdori API 实时计算，不落库）。
+
+    uids 查询参数：前端把表格展示的玩家 uid 列表（逗号分隔）传进来，只返回这些
+    玩家并据此归一化颜色，保证与展示行一致。
+    """
     limit = int(request.args.get('limit', 10))
     hours = int(request.args.get('hours', 48))
-    event = _ensure_event(event_id)
-    if not event:
-        return jsonify({'error': 'event not found'}), 404
-    return jsonify(get_heatmap(event_id, limit, hours, event=event))
+    uids_raw = request.args.get('uids', '')
+    uids = [u for u in uids_raw.split(',') if u] if uids_raw else None
+    return jsonify(get_heatmap_live(event_id, limit=limit, hours=hours, uids=uids))

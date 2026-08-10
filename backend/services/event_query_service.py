@@ -232,20 +232,20 @@ def _heatmap_window(ref_now, hours):
     return newest - (hours - 1), newest
 
 
-def compute_hourly_activity(history_rows, ref_now, hours):
-    """统计每位玩家最近 hours 个小时的周回次数。
+def _activity_counts_by_uid(pts_by_uid, ref_now, hours):
+    """按东京墙钟小时统计每位玩家「PT 创下新高」的次数（纯内存，不落库）。
 
-    history_rows: 升序的历史记录，含 .uid / .timestamp / .pt
+    pts_by_uid: uid -> [(timestamp_ms, pt), ...]（无序，内部会排序）
     返回 uid -> list[int]，index 0 最旧、index hours-1 为最新小时。
     """
     oldest, newest = _heatmap_window(ref_now, hours)
-
-    by_uid = defaultdict(list)
-    for rec in history_rows:
-        by_uid[rec.uid].append((rec.timestamp, rec.pt))
-
     result = {}
-    for uid, pts in by_uid.items():
+    for uid, pts in pts_by_uid.items():
+        # 只保留基准时刻前的采样：活动结束后 Bestdori 仍会追踪一段冻结榜单，
+        # 剔除它们以免把窗口推后、或让最后一格多算
+        pts = [p for p in pts if p[0] <= ref_now]
+        if not pts:
+            continue
         pts.sort(key=lambda x: x[0])
         counts = [0] * hours
         # 以「历史最高 PT」为基线：Bestdori 数据回拨造成的下跌不重复计数，
@@ -271,53 +271,71 @@ def _empty_heatmap(hours):
     }
 
 
-def get_heatmap(event_id, limit=10, hours=HEATMAP_DEFAULT_HOURS, event=None):
-    """返回 top N 玩家的 48h 活跃热力图数据。"""
+def get_heatmap_live(event_id, limit=10, hours=HEATMAP_DEFAULT_HOURS, uids=None):
+    """返回 top N 玩家的 48h 活跃热力图数据。
+
+    与 LiveBoost 一致：直接调用 Bestdori /eventtop/data?interval=60000 拿逐分钟
+    采样点，在内存里按东京墙钟小时统计活跃度，不落库——不受 player_score_history
+    清理影响，也无需为热力图保留任何历史数据（节省硬盘）。
+
+    uids: 可选。前端把「表格正在展示」的玩家 uid 列表传进来时，只返回这些玩家的
+    热力图并据此归一化颜色，保证与页面展示行一致；未传则退回按最新 PT 取前 limit 名。
+    """
+    from services.bestdori_client import client
+
     hours = min(max(1, hours), HEATMAP_MAX_HOURS)
-    cache_key = (str(event_id), limit, hours)
+    uid_key = tuple(sorted(str(u) for u in uids)) if uids else None
+    cache_key = ('live', str(event_id), limit, hours, uid_key)
     cached = heatmap_cache.get(cache_key)
     if cached is not None:
         return cached
 
-    top_scores = repo.get_top_scores(event_id, limit)
-    if not top_scores:
+    top_json = client.get_event_top_data(event_id, server='jp', interval=60000)
+    points = top_json.get('points', []) if top_json else []
+    if not points:
         return heatmap_cache.set(cache_key, _empty_heatmap(hours))
 
-    top_player_uids = [score.uid for score in top_scores]
-    history_records = repo.get_history_for_uids(event_id, top_player_uids)
-    if not history_records:
-        return heatmap_cache.set(cache_key, _empty_heatmap(hours))
-
-    if event is None:
-        event = repo.get_event(event_id)
+    event = repo.get_event(event_id)
     event_end = event.end_at if event and event.end_at and event.end_at > 0 else None
 
-    # 基准时刻：活动结束前的最新采样点。活动结束后数据可能仍延伸一段
-    # （末尾采样点已不在活动期），须以活动结束时间为上限，否则 48h 窗口
-    # 会被推到活动结束后的空档，热力图看起来全是空的。
-    active_samples = [rec.timestamp for rec in history_records
-                      if event_end is None or rec.timestamp <= event_end]
-    ref_now = max(active_samples) if active_samples else max(rec.timestamp for rec in history_records)
+    # 按 uid 聚合采样点，并记下每个 uid 的最新 PT
+    pts_by_uid = defaultdict(list)
+    latest_pt = {}
+    for p in points:
+        uid = str(p.get('uid'))
+        ts = int(p['time'])
+        val = int(p['value'])
+        pts_by_uid[uid].append((ts, val))
+        if uid not in latest_pt or ts > latest_pt[uid][0]:
+            latest_pt[uid] = (ts, val)
 
-    # 丢弃基准时刻之后的残留采样：这些点虽不在窗口内，但会与基准落在同一
-    # 墙钟小时，若不剔除会让最新一格多算
-    history_records = [rec for rec in history_records if rec.timestamp <= ref_now]
+    # 基准时刻：数据中最新采样点。已结束活动按 end_at 封顶，避免活动结束后
+    # 榜单仍被追踪的空档把 48h 窗口推后、看起来全是空的
+    ref_now = max(v[0] for v in latest_pt.values())
+    if event_end is not None and ref_now > event_end:
+        ref_now = event_end
 
-    counts_by_uid = compute_hourly_activity(history_records, ref_now, hours)
+    counts_by_uid = _activity_counts_by_uid(pts_by_uid, ref_now, hours)
+    if not counts_by_uid:
+        return heatmap_cache.set(cache_key, _empty_heatmap(hours))
 
-    # 只统计当前展示玩家的最大值做颜色归一化，避免榜外爆肝玩家拉高 global_max
+    # 目标玩家 = 前端展示的那批 uid；未传时退回按最新 PT 取榜单前 limit 名
+    if uids:
+        target_uids = [str(u) for u in uids]
+    else:
+        target_uids = [uid for uid, _ in sorted(latest_pt.items(), key=lambda kv: kv[1][1], reverse=True)[:limit]]
+
+    # 颜色归一化只按目标玩家统计，避免榜外爆肝玩家拉高 global_max
     global_max = 0
-    for counts in counts_by_uid.values():
+    players = {}
+    for uid in target_uids:
+        counts = counts_by_uid.get(uid)
         if counts:
+            players[uid] = {'counts': counts}
             global_max = max(global_max, max(counts))
 
     newest = _heatmap_window(ref_now, hours)[1]
     ref_ts = _hour_to_utc_ms(newest)  # 最新格子的起始 UTC 时刻
-
-    players = {
-        uid: {'counts': counts_by_uid.get(uid, [0] * hours)}
-        for uid in top_player_uids
-    }
 
     return heatmap_cache.set(cache_key, {
         'timezone': HEATMAP_TIMEZONE,

@@ -5,7 +5,7 @@
       <div class="flex-1 min-w-0">
         <EventSelector :events="events" v-model="selectedEventId" class="w-full" />
       </div>
-      <button @click="forceRefresh" :disabled="isRefreshing" class="md-filled-button flex-shrink-0 min-w-28">
+      <button @click="forceRefresh" :disabled="isRefreshing || isUpcoming" class="md-filled-button flex-shrink-0 min-w-28">
         <span>{{ refreshButtonText }}</span>
       </button>
     </header>
@@ -22,8 +22,9 @@
               <span class="md-chip md-chip--primary">{{ eventTypeZh(currentEvent.type) }}</span>
               <span>开始: {{ formatTs(currentEvent.start_at) }}</span>
               <span>结束: {{ formatTs(currentEvent.end_at) }}</span>
+              <span v-if="isUpcoming" class="md-chip">⏳ 未开始</span>
             </div>
-            <p v-if="!isCurrent" class="text-sm mt-2 text-md-error">
+            <p v-if="!isCurrent && !isUpcoming" class="text-sm mt-2 text-md-error">
               当前未有进行中的活动（显示最近活动）
             </p>
           </div>
@@ -41,7 +42,7 @@
 
     <main class="space-y-8">
       <!-- T10 时速 · 每位玩家一行 + 下方热力图，十人连成一张卡片 -->
-      <div :class="{ 'opacity-50': isRefreshing }">
+      <div v-if="!isUpcoming" :class="{ 'opacity-50': isRefreshing }">
         <h3 class="md-section-title mb-3">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md-section-title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -52,7 +53,7 @@
       </div>
 
       <!-- 时速曲线 -->
-      <div>
+      <div v-if="!isUpcoming">
         <div class="flex items-center justify-between mb-4">
           <h3 class="md-section-title">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md-section-title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -67,6 +68,13 @@
           </div>
           <ChartComponent v-else :series="chartSeries" :current-event="currentEvent" />
         </div>
+      </div>
+
+      <!-- 活动暂未开始：数据区占位 + 倒计时 -->
+      <div v-if="isUpcoming" class="md-elevated-card p-10 text-center">
+        <div class="text-2xl font-bold mb-2">🎵 活动暂未开始</div>
+        <div class="text-sm text-md-on-surface-variant mb-4">距离活动开始还有</div>
+        <div class="text-5xl font-bold tabular-nums text-md-primary">{{ countdownText }}</div>
       </div>
 
       <!-- 页脚 -->
@@ -97,6 +105,7 @@ const selectedEventId = ref(null)
 const selectedHour = ref(null)
 const currentEvent = ref(null)
 const isCurrent = ref(true)
+const nowTs = ref(Date.now())   // 每秒更新，用于「活动暂未开始」倒计时
 const topPlayers = ref([])
 const chartSeries = ref({})
 const heatmapData = ref({ ref_ts: null, global_max: 0, players: {} })
@@ -104,6 +113,26 @@ const lastTopPlayersContext = ref(null)
 const isInitialEventLoad = ref(true)
 
 const eventName = computed(() => currentEvent.value ? currentEvent.value.name : '加载中...')
+
+// 该活动是否尚未开始（远端已给出新活动，但未到 start_at）
+const isUpcoming = computed(() => {
+  if (!currentEvent.value) return false
+  return nowTs.value < currentEvent.value.start_at
+})
+
+// 距离活动开始的倒计时文本
+const countdownText = computed(() => {
+  if (!isUpcoming.value || !currentEvent.value) return ''
+  const ms = currentEvent.value.start_at - nowTs.value
+  if (ms <= 0) return '0 天 00:00:00'
+  const totalSec = Math.floor(ms / 1000)
+  const d = Math.floor(totalSec / 86400)
+  const h = Math.floor((totalSec % 86400) / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  const pad = n => String(n).padStart(2, '0')
+  return `${d} 天 ${pad(h)}:${pad(m)}:${pad(s)}`
+})
 
 const isRefreshing = ref(false)
 const isChartLoading = ref(false)
@@ -135,11 +164,15 @@ async function loadChartDataAsync(eid, interval) {
   }
 }
 
-async function loadHeatmapData(eid) {
+async function loadHeatmapData(eid, uids = []) {
   if (!eid) return
   try {
-    // limit/hours 使用后端默认值（10 / 48）
-    const res = await api.get(`/api/events/${eid}/heatmap`)
+    // 传表格正在展示的玩家 uid，后端只返回这些玩家并据此归一化颜色
+    const params = new URLSearchParams()
+    if (uids && uids.length) {
+      params.append('uids', uids.join(','))
+    }
+    const res = await api.get(`/api/events/${eid}/heatmap?${params.toString()}`)
     heatmapData.value = res.data
   } catch (error) {
     console.error('获取热力图数据失败:', error)
@@ -157,6 +190,16 @@ async function loadTableData(eid, hour, force = false, loadChart = true) {
     }
     const eventRes = await api.get(`/api/events/${eid}?${eventParams.toString()}`)
     currentEvent.value = eventRes.data
+    const nowMs = Date.now()
+    isCurrent.value = nowMs >= eventRes.data.start_at && nowMs <= eventRes.data.end_at
+
+    // 未开始的活动：没有榜单/热力图/曲线数据，跳过后续请求（倒计时归零时再拉）
+    if (isUpcoming.value) {
+      topPlayers.value = []
+      heatmapData.value = { ref_ts: null, global_max: 0, players: {} }
+      chartSeries.value = {}
+      return
+    }
 
     const params = new URLSearchParams()
     if (hour !== null) {
@@ -171,10 +214,15 @@ async function loadTableData(eid, hour, force = false, loadChart = true) {
       topPlayersParams.set('force', 'true')
     }
 
-    const [topPlayersRes] = await Promise.all([
-      api.get(`/api/events/${eid}/top_players?${topPlayersParams.toString()}`),
-      loadHeatmapData(eid),
-    ])
+    const topPlayersRes = await api.get(`/api/events/${eid}/top_players?${topPlayersParams.toString()}`)
+
+    // 用表格正在展示的玩家 uid 去取热力图，保证热力图与展示行、颜色归一化一致
+    const displayedUids = (topPlayersRes.data || []).map(player => player.uid)
+    if (displayedUids.length > 0) {
+      await loadHeatmapData(eid, displayedUids)
+    } else {
+      heatmapData.value = { ref_ts: null, global_max: 0, players: {} }
+    }
 
     const contextKey = `${eid}-${hour ?? 'latest'}`
     const previousPlayers = lastTopPlayersContext.value === contextKey
@@ -202,8 +250,9 @@ async function loadTableData(eid, hour, force = false, loadChart = true) {
     countdown.value = REFRESH_INTERVAL_SECONDS;
   }
 
-  // Chart data loads after table is visible (slow, don't block UI)
-  if (loadChart) {
+  // Chart data loads after table is visible (slow, don't block UI)；
+  // 未开始的活动没有图表数据，跳过
+  if (loadChart && !isUpcoming.value) {
     loadChartDataAsync(eid, '15m')
   }
 }
@@ -227,13 +276,14 @@ async function loadEventsList() {
 }
 
 watch(selectedEventId, (newId) => {
-  if (newId && newId !== parseInt(route.params.eventId)) {
+  if (newId && newId !== String(route.params.eventId)) {
     router.push({ name: 'Event', params: { eventId: newId } })
   }
 })
 
 watch(() => route.params.eventId, (newId) => {
-  const newEventId = newId ? parseInt(newId, 10) : null;
+  // 统一用字符串存 selectedEventId，与 EventSelector 选项值（后端 event_id 为字符串）严格匹配
+  const newEventId = newId ? String(newId) : null;
   selectedEventId.value = newEventId;
   if (newEventId) {
     const forceInitialRefresh = isInitialEventLoad.value;
@@ -241,6 +291,15 @@ watch(() => route.params.eventId, (newId) => {
     loadTableData(newEventId, selectedHour.value, forceInitialRefresh);
   }
 }, { immediate: true });
+
+// 倒计时归零那一刻（活动刚开始）立即拉一次数据；切换活动时的加载由 route watcher 负责
+watch(isUpcoming, (up) => {
+  if (up || !currentEvent.value) return
+  const justStarted = nowTs.value - currentEvent.value.start_at < 5 * 60 * 1000
+  if (justStarted && !isRefreshing.value && selectedEventId.value) {
+    loadTableData(selectedEventId.value, selectedHour.value, true)
+  }
+})
 
 function isEventEnded() {
   if (!currentEvent.value) return true
@@ -268,6 +327,7 @@ onMounted(async () => {
   // Set up auto-refresh
   countdown.value = REFRESH_INTERVAL_SECONDS;
   refreshInterval.value = setInterval(() => {
+    nowTs.value = Date.now(); // 驱动「活动暂未开始」倒计时
     if (isRefreshing.value) return;
     // Pause refresh when tab is hidden
     if (document.hidden) return;
@@ -275,8 +335,8 @@ onMounted(async () => {
     if (countdown.value > 0) {
       countdown.value--;
     } else {
-      // Only auto-refresh table if event is still active (chart updates every 15min)
-      if (!isEventEnded()) {
+      // 只有进行中的活动才自动刷新；未开始的靠倒计时归零触发，已结束的不再拉取
+      if (!isEventEnded() && !isUpcoming.value) {
         loadTableData(selectedEventId.value, selectedHour.value, false, false);
       }
       countdown.value = REFRESH_INTERVAL_SECONDS;
