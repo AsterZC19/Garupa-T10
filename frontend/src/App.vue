@@ -1,42 +1,48 @@
 <template>
-  <div id="app-container" class="flex min-h-screen bg-gray-50">
+  <div id="app-container" class="flex min-h-screen md-surface-container">
+    <!-- MD3 导航抽屉 -->
     <Sidebar :is-open="sidebarOpen" @close="sidebarOpen = false" />
 
-    <!-- Mobile Overlay -->
-    <div 
-      v-if="sidebarOpen" 
-      @click="sidebarOpen = false" 
-      class="fixed inset-0 bg-black opacity-50 z-30 sm:hidden"
+    <!-- 移动端遮罩 -->
+    <div
+      v-if="sidebarOpen"
+      @click="sidebarOpen = false"
+      class="fixed inset-0 bg-black opacity-40 z-30 sm:hidden"
     ></div>
 
-    <!-- Sidebar Toggle Button -->
-    <button 
-      @click="sidebarOpen = !sidebarOpen"
-      class="fixed top-4 p-2 rounded-md text-gray-600 bg-white shadow-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500 z-50 transition-all duration-300"
-      :class="sidebarOpen ? 'left-60' : 'left-4'"
+    <div
+      class="flex-1 flex flex-col transition-all duration-300 min-w-0"
+      :class="{ 'sm:ml-60': sidebarOpen }"
     >
+      <!-- 顶栏（Top App Bar） -->
+      <header class="sticky top-0 z-20 md-surface shadow-md-elevation-1">
+        <div class="mx-auto px-3 sm:px-6">
+          <div class="flex items-center h-16">
+            <!-- 汉堡按钮 -->
+            <button
+              @click="sidebarOpen = !sidebarOpen"
+              aria-label="切换导航"
+              class="p-2 rounded-full text-md-on-surface-variant hover:bg-md-surface-highest transition-colors focus:outline-none"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
 
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-      </svg>
-    </button>
-
-    <div class="flex-1 flex flex-col transition-all duration-300 min-w-0" :class="{'ml-0 sm:ml-56': sidebarOpen}">
-      <header class="sticky top-0 bg-white/80 backdrop-blur-lg shadow-sm z-30">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div class="flex items-center justify-between h-16">
-            <div class="flex items-center pl-16">
-
-              <!-- 标题 -->
-              <router-link to="/" class="ml-4">
-                <h1 class="text-xl font-semibold text-gray-800 hover:text-indigo-500 transition-colors">
-                  日服 T10 追踪
-                </h1>
-              </router-link>
-            </div>
+            <!-- 标题 -->
+            <router-link to="/" class="ml-2 sm:ml-4 flex items-center gap-2 group">
+              <span class="flex items-center justify-center h-8 w-8 rounded-full bg-md-primary-container text-md-on-primary-container font-bold">
+                🎵
+              </span>
+              <h1 class="text-lg sm:text-xl font-semibold text-md-on-surface group-hover:text-md-primary transition-colors">
+                日服 T10 追踪
+              </h1>
+            </router-link>
           </div>
         </div>
       </header>
+
+      <!-- 页面内容 -->
       <main class="flex-1">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">

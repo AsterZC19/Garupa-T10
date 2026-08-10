@@ -1,5 +1,42 @@
 module.exports = {
   content: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
-  theme: { extend: {} },
-  plugins: []
+  theme: {
+    extend: {
+      colors: {
+        md: {
+          primary: 'var(--md-sys-color-primary)',
+          'on-primary': 'var(--md-sys-color-on-primary)',
+          'primary-container': 'var(--md-sys-color-primary-container)',
+          'on-primary-container': 'var(--md-sys-color-on-primary-container)',
+          secondary: 'var(--md-sys-color-secondary)',
+          'on-secondary': 'var(--md-sys-color-on-secondary)',
+          'secondary-container': 'var(--md-sys-color-secondary-container)',
+          'on-secondary-container': 'var(--md-sys-color-on-secondary-container)',
+          error: 'var(--md-sys-color-error)',
+          'on-error': 'var(--md-sys-color-on-error)',
+          'error-container': 'var(--md-sys-color-error-container)',
+          'on-error-container': 'var(--md-sys-color-on-error-container)',
+          surface: 'var(--md-sys-color-surface)',
+          'on-surface': 'var(--md-sys-color-on-surface)',
+          'on-surface-variant': 'var(--md-sys-color-on-surface-variant)',
+          outline: 'var(--md-sys-color-outline)',
+          'outline-variant': 'var(--md-sys-color-outline-variant)',
+          'surface-lowest': 'var(--md-sys-color-surface-container-lowest)',
+          'surface-low': 'var(--md-sys-color-surface-container-low)',
+          'surface-container': 'var(--md-sys-color-surface-container)',
+          'surface-high': 'var(--md-sys-color-surface-container-high)',
+          'surface-highest': 'var(--md-sys-color-surface-container-highest)',
+          increment: 'var(--md-sys-color-increment)',
+          decrement: 'var(--md-sys-color-decrement)',
+          pt: 'var(--md-sys-color-pt)',
+          title: 'var(--md-sys-color-title)',
+        },
+      },
+      boxShadow: {
+        'md-elevation-1': 'var(--md-elevation-1)',
+        'md-elevation-2': 'var(--md-elevation-2)',
+      },
+    },
+  },
+  plugins: [],
 }
