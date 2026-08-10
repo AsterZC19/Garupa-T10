@@ -1,16 +1,17 @@
 <template>
   <div class="flex items-center gap-2">
-    <select v-model="value" class="px-3 py-1 border rounded max-w-[250px] sm:max-w-xs                 │
- │      overflow-hidden text-ellipsis whitespace-nowrap">
-      <option v-for="e in events" :key="e.event_id" :value="e.event_id">
-        {{ e.event_id }} - {{ e.name }} ({{ formatTs(e.start_at) }})
-      </option>
-    </select>
+    <MdSelect
+      :options="selectOptions"
+      v-model="value"
+      class="w-full max-w-[300px] sm:max-w-sm"
+      placeholder="选择活动"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import MdSelect from './MdSelect.vue'
 import { formatTs } from '../utils.js'
 
 const props = defineProps({
@@ -28,4 +29,11 @@ const value = computed({
     emit('update:modelValue', value)
   }
 })
+
+const selectOptions = computed(() =>
+  (props.events || []).map(e => ({
+    value: e.event_id,
+    label: `${e.event_id} - ${e.name} (${formatTs(e.start_at)})`,
+  }))
+)
 </script>

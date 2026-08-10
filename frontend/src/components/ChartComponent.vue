@@ -1,21 +1,21 @@
 <template>
-  <div class="relative w-full h-[800px] sm:h-[900px] md:h-[1000px] lg:h-[1100px]">
+  <div class="relative w-full h-[700px] sm:h-[800px] md:h-[900px]">
     <div class="flex justify-end gap-2 mb-2">
-      <button @click="hideAll" class="px-2 py-1 text-xs border rounded bg-gray-100 hover:bg-gray-200">隐藏所有</button>
-      <button @click="showAll" class="px-2 py-1 text-xs border rounded bg-gray-100 hover:bg-gray-200">显示所有</button>
+      <button @click="hideAll" class="md-text-button text-xs">隐藏所有</button>
+      <button @click="showAll" class="md-text-button text-xs">显示所有</button>
     </div>
     <canvas ref="canvasRef" class="w-full h-full block"></canvas>
     <div ref="controlsRef" class="absolute flex items-start gap-2" style="left: -9999px; top: 0;">
       <div class="flex flex-col gap-1">
-        <button @click="zoomIn" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm">+</button>
-        <button @click="zoomOut" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm">-</button>
-        <button @click="resetZoom" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm">↺</button>
+        <button @click="zoomIn" class="chart-ctrl-btn">+</button>
+        <button @click="zoomOut" class="chart-ctrl-btn">-</button>
+        <button @click="resetZoom" class="chart-ctrl-btn">↺</button>
       </div>
       <div class="grid grid-cols-3 gap-1">
-        <button @click="panChart(0, 50)" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm col-start-2">↑</button>
-        <button @click="panChart(50, 0)" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm col-start-1 row-start-2">←</button>
-        <button @click="panChart(-50, 0)" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm col-start-3 row-start-2">→</button>
-        <button @click="panChart(0, -50)" class="w-6 h-6 flex items-center justify-center text-sm border rounded-full bg-gray-100/50 hover:bg-gray-100 backdrop-blur-sm col-start-2 row-start-3">↓</button>
+        <button @click="panChart(0, 50)" class="chart-ctrl-btn col-start-2">↑</button>
+        <button @click="panChart(50, 0)" class="chart-ctrl-btn col-start-1 row-start-2">←</button>
+        <button @click="panChart(-50, 0)" class="chart-ctrl-btn col-start-3 row-start-2">→</button>
+        <button @click="panChart(0, -50)" class="chart-ctrl-btn col-start-2 row-start-3">↓</button>
       </div>
     </div>
   </div>
@@ -39,6 +39,11 @@ const controlsRef = ref(null)
 let chart = null
 let lastEventId = null
 const MAX_POINTS_PER_DATASET = 500
+
+// MD3 主题变量读取（深色/亮色随 prefers-color-scheme 切换）
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || null
+}
 
 function hideAll() {
   if (!chart) return;
@@ -140,9 +145,30 @@ const draw = () => {
   const eventChanged = currentEventId !== lastEventId
   const datasets = buildDatasets(props.series, props.currentEvent)
 
+  const gridColor = cssVar('--md-sys-color-outline-variant') || '#e0e0e0'
+  const tickColor = cssVar('--md-sys-color-on-surface-variant') || '#666'
+  const labelColor = cssVar('--md-sys-color-on-surface') || '#111'
+  // 提示框底色用「表面」色：亮色下是淡蓝白，深色下是深色 —— 不再用 inverse-surface（亮色下是黑的）
+  const tooltipOpts = {
+    backgroundColor: cssVar('--md-sys-color-surface') || '#ffffff',
+    titleColor: cssVar('--md-sys-color-on-surface') || '#111',
+    bodyColor: cssVar('--md-sys-color-on-surface') || '#111',
+    borderColor: cssVar('--md-sys-color-outline-variant') || '#ddd',
+    borderWidth: 1,
+    padding: 10,
+    cornerRadius: 8,
+    boxPadding: 4,
+  }
+
   if (chart && !eventChanged) {
     // Same event, just update data in place
     chart.data.datasets = datasets
+    chart.options.scales.x.grid.color = gridColor
+    chart.options.scales.y.grid.color = gridColor
+    chart.options.scales.x.ticks.color = tickColor
+    chart.options.scales.y.ticks.color = tickColor
+    chart.options.plugins.legend.labels.color = labelColor
+    Object.assign(chart.options.plugins.tooltip, tooltipOpts)
     chart.update('none')
     return
   }
@@ -173,9 +199,11 @@ const draw = () => {
           fullSize: true,
           labels: {
             boxWidth: 12,
-            font: { size: 12 }
+            font: { size: 12 },
+            color: labelColor
           }
         },
+        tooltip: tooltipOpts,
         zoom: {
           limits: {
             x: {
@@ -203,6 +231,8 @@ const draw = () => {
           type: 'time',
           min: props.currentEvent.start_at,
           max: props.currentEvent.end_at,
+          grid: { color: gridColor },
+          ticks: { color: tickColor },
           adapters: {
             date: {
               locale: zhCN
@@ -217,7 +247,9 @@ const draw = () => {
           }
         },
         y: {
-          beginAtZero: false
+          beginAtZero: false,
+          grid: { color: gridColor },
+          ticks: { color: tickColor }
         }
       }
     }
@@ -248,4 +280,33 @@ onBeforeUnmount(() => {
 // Shallow watch - only triggers when object references change
 watch(() => props.series, draw)
 watch(() => props.currentEvent, draw)
+
+// 主题切换时重建图表（网格/文字颜色随 MD3 主题）
+const darkMedia = window.matchMedia('(prefers-color-scheme: dark)')
+const onThemeChange = () => draw()
+darkMedia.addEventListener('change', onThemeChange)
+
+onBeforeUnmount(() => {
+  darkMedia.removeEventListener('change', onThemeChange)
+})
 </script>
+
+<style scoped>
+.chart-ctrl-btn {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  border-radius: 9999px;
+  color: var(--md-sys-color-on-surface-variant);
+  background-color: color-mix(in srgb, var(--md-sys-color-surface-container-high) 80%, transparent);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  backdrop-filter: blur(4px);
+  transition: background-color 0.15s ease;
+}
+.chart-ctrl-btn:hover {
+  background-color: var(--md-sys-color-surface-container-highest);
+}
+</style>

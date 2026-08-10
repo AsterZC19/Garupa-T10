@@ -4,7 +4,12 @@ from datetime import datetime
 import time
 from concurrent.futures import ThreadPoolExecutor
 from services.event_ingestion import TOP_PLAYERS_INTERVAL_MS, parse_and_store_event_data, refresh_event_top_data
-from services.event_query_service import clear_event_query_cache, get_chart_series, get_top_players as get_top_players_data
+from services.event_query_service import (
+    clear_event_query_cache,
+    get_chart_series,
+    get_heatmap,
+    get_top_players as get_top_players_data,
+)
 from services.event_repository import (
     get_current_or_latest_event,
     get_event as find_event,
@@ -59,6 +64,15 @@ def _bg_refresh_top_players(app, event_id, interval):
     except Exception as e:
         _last_top_players_refresh_time[event_id] = 0
         app.logger.error(f"Background top_players refresh failed for event {event_id}: {e}")
+
+
+def _ensure_event(event_id):
+    """确保活动存在并返回；本地缺失时尝试从 Bestdori 拉取，仍无则返回 None。"""
+    event = find_event(event_id)
+    if not event:
+        parse_and_store_event_data(event_id)
+        event = find_event(event_id)
+    return event
 
 @events_bp.route('/', methods=['GET'])
 def list_events():
@@ -147,12 +161,9 @@ def get_chart(event_id):
 def get_top_players(event_id):
     limit = int(request.args.get('limit', 10))
     interval = int(request.args.get('interval', TOP_PLAYERS_INTERVAL_MS))
-    event = find_event(event_id)
+    event = _ensure_event(event_id)
     if not event:
-        parse_and_store_event_data(event_id)
-        event = find_event(event_id)
-        if not event:
-            return jsonify({'error': 'event not found'}), 404
+        return jsonify({'error': 'event not found'}), 404
 
     refresh_requested = request.args.get('refresh') == 'true'
     force_refresh = request.args.get('force') == 'true'
@@ -170,3 +181,13 @@ def get_top_players(event_id):
     if player_data is None:
         return jsonify({'error': 'event not found'}), 404
     return jsonify(player_data)
+
+@events_bp.route('/<string:event_id>/heatmap', methods=['GET'])
+def get_heatmap_route(event_id):
+    """top N 玩家的 48h 活跃热力图（每位玩家一行展示）。"""
+    limit = int(request.args.get('limit', 10))
+    hours = int(request.args.get('hours', 48))
+    event = _ensure_event(event_id)
+    if not event:
+        return jsonify({'error': 'event not found'}), 404
+    return jsonify(get_heatmap(event_id, limit, hours, event=event))

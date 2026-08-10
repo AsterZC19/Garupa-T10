@@ -1,64 +1,80 @@
 <template>
-  <div class="p-4 sm:p-6 max-w-full sm:max-w-xl md:max-w-3xl lg:max-w-6xl mx-auto">
+  <div class="p-4 sm:p-6 max-w-7xl mx-auto">
+    <!-- 顶部：活动选择 + 刷新 -->
     <header class="flex items-center justify-between mb-4 gap-2">
       <div class="flex-1 min-w-0">
         <EventSelector :events="events" v-model="selectedEventId" class="w-full" />
       </div>
-      <button @click="forceRefresh" :disabled="isRefreshing" class="flex-shrink-0 px-3 py-1 border rounded bg-gray-100 hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed w-28 text-center">
+      <button @click="forceRefresh" :disabled="isRefreshing" class="md-filled-button flex-shrink-0 min-w-28">
         <span>{{ refreshButtonText }}</span>
       </button>
     </header>
 
-    <!-- Event Name and Banner Section -->
-    <section v-if="currentEvent" class="flex flex-col-reverse md:flex-row items-center md:items-stretch justify-between mb-6 gap-6" :class="{ 'opacity-50': isRefreshing }">
-      <!-- Event Name and Details (now first for large screen row layout) -->
-      <div class="flex-grow flex flex-col h-full text-center">
-        <div class="flex flex-col justify-center flex-1">
-          <h1 class="text-2xl font-bold mb-2 event-title bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-pink-400 hover:scale-105 transition-transform">{{ eventName }}</h1>
-          <div class="flex gap-4 text-sm text-gray-700 justify-center mb-2">
-            <div>类型: {{ eventTypeZh(currentEvent.type) }}</div>
-            <div>开始: {{ formatTs(currentEvent.start_at) }}</div>
-            <div>结束: {{ formatTs(currentEvent.end_at) }}</div>
+    <!-- 活动信息卡 -->
+    <section v-if="currentEvent" class="mb-6" :class="{ 'opacity-50': isRefreshing }">
+      <div class="md-elevated-card p-5 flex flex-col-reverse md:flex-row items-center md:items-stretch justify-between gap-5">
+        <div class="flex-grow flex flex-col text-center min-w-0">
+          <div class="flex flex-col justify-center flex-1">
+            <h1 class="text-2xl font-bold mb-2 event-title bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-pink-400 hover:scale-105 transition-transform">
+              {{ eventName }}
+            </h1>
+            <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm text-md-on-surface-variant justify-center mb-2">
+              <span class="md-chip md-chip--primary">{{ eventTypeZh(currentEvent.type) }}</span>
+              <span>开始: {{ formatTs(currentEvent.start_at) }}</span>
+              <span>结束: {{ formatTs(currentEvent.end_at) }}</span>
+            </div>
+            <p v-if="!isCurrent" class="text-sm mt-2 text-md-error">
+              当前未有进行中的活动（显示最近活动）
+            </p>
           </div>
-          <p v-if="!isCurrent" class="text-yellow-600 mt-2">当前未有进行中的活动（显示最近活动）</p>
+          <div class="text-center text-xs text-md-on-surface-variant mt-3">
+            感谢
+            <a href="https://bestdori.com" target="_blank" rel="noopener" class="underline hover:text-md-primary">Bestdori</a>
+            提供数据
+          </div>
         </div>
-        <div class="text-center text-xs text-gray-400 mb-2 mt-4">
-          感谢
-          <a href="https://bestdori.com" target="_blank" rel="noopener" class="underline hover:text-blue-500">Bestdori</a>
-          提供数据
+        <div v-if="currentEvent.banner_url" class="flex-shrink-0 flex items-center max-w-full">
+          <img :src="currentEvent.banner_url" alt="Event Banner" class="max-w-full h-auto rounded-xl" />
         </div>
-      </div>
-      <!-- Banner Image (now second for large screen row layout, but appears first on mobile due to flex-col-reverse) -->
-      <div v-if="currentEvent.banner_url" class="flex-shrink-0 flex items-center mb-4 md:mb-0">
-        <img :src="currentEvent.banner_url" alt="Event Banner" class="max-w-full h-auto" />
       </div>
     </section>
 
-    <main class="space-y-6">
+    <main class="space-y-8">
+      <!-- T10 时速 · 每位玩家一行 + 下方热力图，十人连成一张卡片 -->
       <div :class="{ 'opacity-50': isRefreshing }">
-        <h3 class="font-semibold mb-2 text-center">T10 时速</h3>
-        <TopPlayersTable :players="topPlayers" />
+        <h3 class="md-section-title mb-3">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md-section-title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          T10 时速
+        </h3>
+        <TopPlayersTable :players="topPlayers" :heatmap-data="heatmapData" />
       </div>
+
+      <!-- 时速曲线 -->
       <div>
-        <h3 class="font-semibold mb-2 text-center">时速曲线</h3>
-        <div v-if="isChartLoading" class="h-[800px] sm:h-[900px] md:h-[1000px] lg:h-[1100px] flex items-center justify-center text-gray-400">
-          <span class="animate-pulse">图表加载中...</span>
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="md-section-title">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md-section-title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 13h2l3-8 4 12 3-6 2 2h4" />
+            </svg>
+            时速曲线
+          </h3>
         </div>
-        <ChartComponent v-else :series="chartSeries" :current-event="currentEvent" />
+        <div class="md-elevated-card p-4">
+          <div v-if="isChartLoading" class="h-[700px] sm:h-[800px] md:h-[900px] flex items-center justify-center text-md-on-surface-variant">
+            <span class="animate-pulse">图表加载中...</span>
+          </div>
+          <ChartComponent v-else :series="chartSeries" :current-event="currentEvent" />
+        </div>
       </div>
-      <br />
+
       <!-- 页脚 -->
-      <footer class="mt-10 text-center text-xs text-gray-400">
-        由
-        <span class="text-cyan-400">🎵</span>
-        构建 /
-        <a href="https://github.com/AsterZC19/Garupa-T10" target="_blank" rel="noopener" class="underline hover:text-blue-500">
+      <footer class="pt-6 text-center text-xs text-md-on-surface-variant">
+        由 <span>🎵</span> 构建 /
+        <a href="https://github.com/AsterZC19/Garupa-T10" target="_blank" rel="noopener" class="underline hover:text-md-primary">
           GitHub
         </a>
-        <!-- / CDN by
-        <a href="https://cdn.sharon.io/aff.php?aff=101" target="_blank" rel="noopener" class="underline hover:text-blue-500">
-          Sharon CDN
-        </a> -->
       </footer>
     </main>
   </div>
@@ -83,6 +99,7 @@ const currentEvent = ref(null)
 const isCurrent = ref(true)
 const topPlayers = ref([])
 const chartSeries = ref({})
+const heatmapData = ref({ ref_ts: null, global_max: 0, players: {} })
 const lastTopPlayersContext = ref(null)
 const isInitialEventLoad = ref(true)
 
@@ -118,6 +135,18 @@ async function loadChartDataAsync(eid, interval) {
   }
 }
 
+async function loadHeatmapData(eid) {
+  if (!eid) return
+  try {
+    // limit/hours 使用后端默认值（10 / 48）
+    const res = await api.get(`/api/events/${eid}/heatmap`)
+    heatmapData.value = res.data
+  } catch (error) {
+    console.error('获取热力图数据失败:', error)
+    heatmapData.value = { ref_ts: null, global_max: 0, players: {} }
+  }
+}
+
 async function loadTableData(eid, hour, force = false, loadChart = true) {
   if (!eid) return
   isRefreshing.value = true
@@ -142,22 +171,26 @@ async function loadTableData(eid, hour, force = false, loadChart = true) {
       topPlayersParams.set('force', 'true')
     }
 
-    const topPlayersRes = await api.get(`/api/events/${eid}/top_players?${topPlayersParams.toString()}`)
+    const [topPlayersRes] = await Promise.all([
+      api.get(`/api/events/${eid}/top_players?${topPlayersParams.toString()}`),
+      loadHeatmapData(eid),
+    ])
 
     const contextKey = `${eid}-${hour ?? 'latest'}`
-    const previousPts = lastTopPlayersContext.value === contextKey
-      ? new Map(topPlayers.value.map(player => [player.uid, player.pt]))
+    const previousPlayers = lastTopPlayersContext.value === contextKey
+      ? new Map(topPlayers.value.map(player => [player.uid, player]))
       : new Map()
 
     topPlayers.value = topPlayersRes.data.map(player => {
-      const previousPt = previousPts.get(player.uid)
-      const ptIncrease = typeof player.pt === 'number' && typeof previousPt === 'number'
-        ? player.pt - previousPt
+      const previousPlayer = previousPlayers.get(player.uid)
+      const ptIncrease = previousPlayer
+        && typeof player.pt === 'number' && typeof previousPlayer.pt === 'number'
+        ? player.pt - previousPlayer.pt
         : null
 
       return {
         ...player,
-        ptIncrease
+        ptIncrease,
       }
     })
     lastTopPlayersContext.value = contextKey
@@ -289,7 +322,7 @@ function eventTypeZh(type) {
 
 <style>
 .event-title {
-  text-shadow: 0 0 1px rgba(0,0,0,0.1);
+  text-shadow: 0 0 1px rgba(0, 0, 0, 0.1);
   animation: titleFade 0.5s ease-in-out;
 }
 
