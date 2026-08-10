@@ -18,7 +18,7 @@
             <h1 class="text-2xl font-bold mb-2 event-title bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-pink-400 hover:scale-105 transition-transform">
               {{ eventName }}
             </h1>
-            <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm text-md-on-surface-variant justify-center mb-2">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-md-on-surface-variant justify-center mb-2">
               <span class="md-chip md-chip--primary">{{ eventTypeZh(currentEvent.type) }}</span>
               <span>开始: {{ formatTs(currentEvent.start_at) }}</span>
               <span>结束: {{ formatTs(currentEvent.end_at) }}</span>

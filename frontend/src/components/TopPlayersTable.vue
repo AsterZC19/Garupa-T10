@@ -36,7 +36,7 @@
                 </td>
                 <td class="px-3 py-1.5 text-center whitespace-nowrap font-medium">{{ p.name }}</td>
                 <td class="px-3 py-1.5 text-center whitespace-nowrap tabular-nums">
-                  <div class="text-[22px] font-semibold text-md-pt leading-tight">
+                  <div class="text-[20px] font-semibold text-md-pt leading-tight">
                     {{ typeof p.pt === 'number' ? p.pt.toLocaleString() : p.pt }}
                   </div>
                   <div
@@ -46,12 +46,12 @@
                     +{{ p.ptIncrease.toLocaleString() }}
                   </div>
                 </td>
-                <td class="px-3 py-1.5 text-center whitespace-nowrap tabular-nums text-[22px] font-semibold leading-tight">
+                <td class="px-3 py-1.5 text-center whitespace-nowrap tabular-nums text-[20px] font-semibold leading-tight">
                   {{ idx > 0 && typeof (rows[idx - 1].pt - p.pt) === 'number'
                       ? (rows[idx - 1].pt - p.pt).toLocaleString()
                       : '-' }}
                 </td>
-                <td class="px-3 py-1.5 text-center whitespace-nowrap tabular-nums text-[22px] font-semibold text-md-increment leading-tight">
+                <td class="px-3 py-1.5 text-center whitespace-nowrap tabular-nums text-[20px] font-semibold text-md-increment leading-tight">
                   {{ typeof p.hourly_speed === 'number' ? p.hourly_speed.toLocaleString() : p.hourly_speed }}
                 </td>
                 <td class="px-3 py-1.5 text-center whitespace-nowrap tabular-nums">
