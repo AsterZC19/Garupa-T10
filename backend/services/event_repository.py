@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import Integer, cast, func
-from models import db, Event, Score, ChartPoint, PlayerScoreHistory
+from models import db, Event, Score, ChartPoint, PlayerScoreHistory, EventHeatmapCache
 
 
 def now_ms():
@@ -382,6 +382,53 @@ def get_history_for_uids(event_id, uids):
         PlayerScoreHistory.event_id == str(event_id),
         PlayerScoreHistory.uid.in_(uids)
     ).order_by(PlayerScoreHistory.timestamp.asc()).all()
+
+
+# ---------------------------------------------------------------------------
+# 48h 热力图缓存（每小时由调度器预计算落库，页面读库即可）
+# ---------------------------------------------------------------------------
+
+
+def replace_heatmap_cache(event_id, rows):
+    """全量替换某活动的前 N 名热力图缓存。
+
+    rows: [(uid, counts_json, ref_ts)]，counts_json 为 JSON 数组（index 0 最旧）。
+    """
+    event_id = str(event_id)
+    EventHeatmapCache.query.filter_by(event_id=event_id).delete()
+    if rows:
+        now = now_ms()
+        db.session.bulk_insert_mappings(EventHeatmapCache, [
+            {
+                'event_id': event_id,
+                'uid': uid,
+                'counts': counts,
+                'ref_ts': ref_ts,
+                'updated_at': now,
+            }
+            for uid, counts, ref_ts in rows
+        ])
+    db.session.commit()
+
+
+def get_heatmap_cache_rows(event_id):
+    """返回该活动全部热力图缓存行 [(uid, counts_json, ref_ts)]。表不存在时容错返回 []。"""
+    try:
+        rows = EventHeatmapCache.query.filter_by(event_id=str(event_id)).all()
+        return [(r.uid, r.counts, r.ref_ts) for r in rows]
+    except Exception:
+        return []
+
+
+def get_heatmap_cache_latest_ref_ts(event_id):
+    """该活动缓存中最新格子的起始 UTC 毫秒；无缓存或表不存在时返回 None。"""
+    try:
+        row = EventHeatmapCache.query.filter_by(event_id=str(event_id)).order_by(
+            EventHeatmapCache.ref_ts.desc()
+        ).first()
+        return row.ref_ts if row else None
+    except Exception:
+        return None
 
 
 def get_duplicate_history_points(limit=100):

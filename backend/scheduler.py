@@ -1,5 +1,6 @@
 # backend/scheduler.py
 import logging
+import threading
 import time
 from datetime import datetime, timedelta
 from apscheduler.executors.pool import ThreadPoolExecutor
@@ -9,6 +10,7 @@ from models import db, Event, Score, PlayerDegree, AppState, PlayerScoreHistory,
 from services.bestdori_client import client
 from services.event_ingestion import backfill_event_history, parse_and_store_event_data, record_active_event_top_10
 from services.event_repository import get_all_event_ids, get_event_ids_with_history, backfill_chart_data_cache
+from services.heatmap import compute_heatmap_cache, heatmap_cache_covers_window
 
 KEEP_MINUTES = 30  # minutes of per-minute data to keep per ended event
 
@@ -209,6 +211,49 @@ def backfill_all_events_history(app):
             db.session.rollback()
 
 
+_heatmap_lock = threading.Lock()
+
+
+def refresh_heatmap_cache(app):
+    """每小时预计算并落库 top-10 玩家的 48h 热力图（读库，不再实时请求 Bestdori）。
+
+    - 进行中的活动：每次重算（数据在变）。
+    - 已结束的活动：只在缓存尚未覆盖到活动结束小时时算一次（数据已冻结）。
+    - 未开始的活动：跳过。
+    活动按「进行中优先、已结束按结束时间倒序」处理，保证当前活动最先有数据。
+    """
+    if not _heatmap_lock.acquire(blocking=False):
+        logging.info("Heatmap refresh already running; skipping this tick.")
+        return
+    try:
+        with app.app_context():
+            now = int(time.time() * 1000)
+            events = Event.query.all()
+            active = [e for e in events if e.start_at <= now <= e.end_at]
+            ended = [e for e in events if e.end_at and e.end_at < now]
+            ended.sort(key=lambda e: e.end_at, reverse=True)
+
+            for event in active + ended:
+                eid = event.event_id
+                if eid == '5001':
+                    continue
+                needs = event.end_at >= now or not heatmap_cache_covers_window(eid, event.end_at)
+                if not needs:
+                    continue
+                try:
+                    inserted = compute_heatmap_cache(eid)
+                    if inserted:
+                        logging.info(f"Heatmap cache: updated event {eid} ({inserted} players).")
+                    else:
+                        logging.info(f"Heatmap cache: no data for event {eid}.")
+                except Exception as e:
+                    logging.error(f"Heatmap cache: failed for event {eid}: {e}", exc_info=True)
+                    db.session.rollback()
+                time.sleep(1)  # 对 Bestdori 友好：首次回填会连续请求多个活动
+    finally:
+        _heatmap_lock.release()
+
+
 def _prune_event_data(event, app):
     """
     After an event ends: backfill its chart_data_cache, then prune raw per-minute
@@ -260,7 +305,8 @@ def init_scheduler(app):
     """Initializes and starts the scheduler with aligned job start times."""
     executors = {
         'default': ThreadPoolExecutor(1),
-        'priority': ThreadPoolExecutor(1)
+        'priority': ThreadPoolExecutor(1),
+        'heatmap': ThreadPoolExecutor(1),
     }
     scheduler = BackgroundScheduler(executors=executors, daemon=True)
 
@@ -273,9 +319,11 @@ def init_scheduler(app):
     scheduler.add_job(update_t10_achievements, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='default', max_instances=1)
     scheduler.add_job(record_top_10_scores, 'interval', args=[app], minutes=1, start_date=next_minute, misfire_grace_time=60, executor='priority', max_instances=1)
     scheduler.add_job(backfill_all_events_history, 'date', args=[app], run_date=next_minute, misfire_grace_time=300, executor='default', max_instances=1)
+    scheduler.add_job(refresh_heatmap_cache, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='heatmap', max_instances=1)
     # Immediate startup jobs (non-blocking, run 3s after scheduler starts)
     scheduler.add_job(discover_new_events, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='default', max_instances=1)
     scheduler.add_job(update_t10_achievements, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='default', max_instances=1)
+    scheduler.add_job(refresh_heatmap_cache, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='heatmap', max_instances=1)
 
     scheduler.start()
     logging.info("Scheduler started. Startup jobs scheduled to run immediately.")

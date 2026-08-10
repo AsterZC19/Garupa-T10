@@ -70,6 +70,22 @@ class ChartDataCache(db.Model):
     name = db.Column(db.String)
 
 
+class EventHeatmapCache(db.Model):
+    """Pre-computed 48h active-heatmap counts for an event's top-10 players.
+
+    由调度器每小时从 Bestdori 拉一次逐分钟榜单、按东京墙钟小时统计「PT 创新高」
+    次数后落库；页面读此表即可，不再每次实时请求 Bestdori。counts 为 JSON 数组，
+    index 0 最旧、末尾最新（长度 = HEATMAP_MAX_HOURS），ref_ts 为最新格子的
+    起始 UTC 毫秒。
+    """
+    __tablename__ = 'event_heatmap_cache'
+    event_id = db.Column(db.String, primary_key=True)
+    uid = db.Column(db.String, primary_key=True)
+    counts = db.Column(db.Text, nullable=True)   # JSON: list[int]
+    ref_ts = db.Column(db.Integer, nullable=True)  # ms, newest hour start (UTC)
+    updated_at = db.Column(db.Integer, default=now_ms)
+
+
 class PlayerScoreHistory(db.Model):
     __tablename__ = 'player_score_history'
     id = db.Column(db.Integer, primary_key=True)

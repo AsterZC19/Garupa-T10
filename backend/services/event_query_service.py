@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 from collections import defaultdict
 from zoneinfo import ZoneInfo
 from datetime import datetime
@@ -271,71 +272,68 @@ def _empty_heatmap(hours):
     }
 
 
-def get_heatmap_live(event_id, limit=10, hours=HEATMAP_DEFAULT_HOURS, uids=None):
-    """返回 top N 玩家的 48h 活跃热力图数据。
+def _parse_counts(counts_json):
+    if not counts_json:
+        return None
+    try:
+        parsed = json.loads(counts_json)
+        if isinstance(parsed, list):
+            return [int(c) for c in parsed]
+    except Exception:
+        return None
+    return None
 
-    与 LiveBoost 一致：直接调用 Bestdori /eventtop/data?interval=60000 拿逐分钟
-    采样点，在内存里按东京墙钟小时统计活跃度，不落库——不受 player_score_history
-    清理影响，也无需为热力图保留任何历史数据（节省硬盘）。
+
+def get_heatmap(event_id, limit=10, hours=HEATMAP_DEFAULT_HOURS, uids=None):
+    """返回 top N 玩家的 48h 活跃热力图数据（读 event_heatmap_cache 缓存，不请求 Bestdori）。
+
+    缓存由调度器每小时预计算落库（services.heatmap.compute_heatmap_cache）。返回结构
+    与旧的实时接口一致：players[uid].counts 数组 index 0 最旧，ref_ts 为最新格子的
+    起始 UTC 毫秒。
 
     uids: 可选。前端把「表格正在展示」的玩家 uid 列表传进来时，只返回这些玩家的
-    热力图并据此归一化颜色，保证与页面展示行一致；未传则退回按最新 PT 取前 limit 名。
+    热力图并据此归一化颜色；未传则退回按当前 PT 取前 limit 名。
     """
-    from services.bestdori_client import client
-
     hours = min(max(1, hours), HEATMAP_MAX_HOURS)
     uid_key = tuple(sorted(str(u) for u in uids)) if uids else None
-    cache_key = ('live', str(event_id), limit, hours, uid_key)
+    cache_key = ('cached', str(event_id), limit, hours, uid_key)
     cached = heatmap_cache.get(cache_key)
     if cached is not None:
         return cached
 
-    top_json = client.get_event_top_data(event_id, server='jp', interval=60000)
-    points = top_json.get('points', []) if top_json else []
-    if not points:
-        return heatmap_cache.set(cache_key, _empty_heatmap(hours))
-
     event = repo.get_event(event_id)
-    event_end = event.end_at if event and event.end_at and event.end_at > 0 else None
+    if not event:
+        return _empty_heatmap(hours)
 
-    # 按 uid 聚合采样点，并记下每个 uid 的最新 PT
-    pts_by_uid = defaultdict(list)
-    latest_pt = {}
-    for p in points:
-        uid = str(p.get('uid'))
-        ts = int(p['time'])
-        val = int(p['value'])
-        pts_by_uid[uid].append((ts, val))
-        if uid not in latest_pt or ts > latest_pt[uid][0]:
-            latest_pt[uid] = (ts, val)
-
-    # 基准时刻：数据中最新采样点。已结束活动按 end_at 封顶，避免活动结束后
-    # 榜单仍被追踪的空档把 48h 窗口推后、看起来全是空的
-    ref_now = max(v[0] for v in latest_pt.values())
-    if event_end is not None and ref_now > event_end:
-        ref_now = event_end
-
-    counts_by_uid = _activity_counts_by_uid(pts_by_uid, ref_now, hours)
-    if not counts_by_uid:
-        return heatmap_cache.set(cache_key, _empty_heatmap(hours))
-
-    # 目标玩家 = 前端展示的那批 uid；未传时退回按最新 PT 取榜单前 limit 名
     if uids:
         target_uids = [str(u) for u in uids]
     else:
-        target_uids = [uid for uid, _ in sorted(latest_pt.items(), key=lambda kv: kv[1][1], reverse=True)[:limit]]
+        target_uids = [str(s.uid) for s in repo.get_top_scores(event_id, limit)]
+
+    rows = repo.get_heatmap_cache_rows(event_id)
+    if not rows:
+        return _empty_heatmap(hours)
+
+    stored = {}
+    ref_ts = 0
+    for uid, counts_json, row_ref_ts in rows:
+        counts = _parse_counts(counts_json)
+        if counts is None:
+            continue
+        stored[uid] = counts
+        if row_ref_ts and row_ref_ts > ref_ts:
+            ref_ts = row_ref_ts
 
     # 颜色归一化只按目标玩家统计，避免榜外爆肝玩家拉高 global_max
     global_max = 0
     players = {}
     for uid in target_uids:
-        counts = counts_by_uid.get(uid)
-        if counts:
-            players[uid] = {'counts': counts}
-            global_max = max(global_max, max(counts))
-
-    newest = _heatmap_window(ref_now, hours)[1]
-    ref_ts = _hour_to_utc_ms(newest)  # 最新格子的起始 UTC 时刻
+        counts = stored.get(uid)
+        if counts is None:
+            continue
+        counts = counts[-hours:]  # 缓存覆盖整段窗口，取最后 hours 格
+        players[uid] = {'counts': counts}
+        global_max = max(global_max, max(counts))
 
     return heatmap_cache.set(cache_key, {
         'timezone': HEATMAP_TIMEZONE,
