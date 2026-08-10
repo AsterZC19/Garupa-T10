@@ -24,9 +24,6 @@
               <span>结束: {{ formatTs(currentEvent.end_at) }}</span>
               <span v-if="isUpcoming" class="md-chip">⏳ 未开始</span>
             </div>
-            <p v-if="!isCurrent && !isUpcoming" class="text-sm mt-2 text-md-error">
-              当前未有进行中的活动（显示最近活动）
-            </p>
           </div>
           <div class="text-center text-xs text-md-on-surface-variant mt-3">
             感谢
@@ -104,7 +101,6 @@ const events = ref([])
 const selectedEventId = ref(null)
 const selectedHour = ref(null)
 const currentEvent = ref(null)
-const isCurrent = ref(true)
 const nowTs = ref(Date.now())   // 每秒更新，用于「活动暂未开始」倒计时
 const topPlayers = ref([])
 const chartSeries = ref({})
@@ -120,18 +116,18 @@ const isUpcoming = computed(() => {
   return nowTs.value < currentEvent.value.start_at
 })
 
-// 距离活动开始的倒计时文本
+// 距离活动开始的倒计时文本（日 时 分 秒）
 const countdownText = computed(() => {
   if (!isUpcoming.value || !currentEvent.value) return ''
   const ms = currentEvent.value.start_at - nowTs.value
-  if (ms <= 0) return '0 天 00:00:00'
+  if (ms <= 0) return '00 日 00 时 00 分 00 秒'
   const totalSec = Math.floor(ms / 1000)
   const d = Math.floor(totalSec / 86400)
   const h = Math.floor((totalSec % 86400) / 3600)
   const m = Math.floor((totalSec % 3600) / 60)
   const s = totalSec % 60
   const pad = n => String(n).padStart(2, '0')
-  return `${d} 天 ${pad(h)}:${pad(m)}:${pad(s)}`
+  return `${pad(d)} 日 ${pad(h)} 时 ${pad(m)} 分 ${pad(s)} 秒`
 })
 
 const isRefreshing = ref(false)
@@ -188,10 +184,18 @@ async function loadTableData(eid, hour, force = false, loadChart = true) {
     if (force) {
       eventParams.append('force', 'true');
     }
-    const eventRes = await api.get(`/api/events/${eid}?${eventParams.toString()}`)
+    // 活动不存在（无效 ID / 已被删除）→ 跳转主题化 404 页面
+    let eventRes
+    try {
+      eventRes = await api.get(`/api/events/${eid}?${eventParams.toString()}`)
+    } catch (error) {
+      if (error?.response?.status === 404) {
+        router.replace({ name: 'NotFound' })
+        return
+      }
+      throw error
+    }
     currentEvent.value = eventRes.data
-    const nowMs = Date.now()
-    isCurrent.value = nowMs >= eventRes.data.start_at && nowMs <= eventRes.data.end_at
 
     // 未开始的活动：没有榜单/热力图/曲线数据，跳过后续请求（倒计时归零时再拉）
     if (isUpcoming.value) {

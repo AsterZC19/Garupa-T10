@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import EventView from './views/EventView.vue';
 import PlayerSearchView from './views/PlayerSearchView.vue';
+import NotFoundView from './views/NotFoundView.vue';
 
 const routes = [
   {
@@ -26,8 +27,13 @@ const routes = [
     props: true, // uid 直接作为 props
   },
   {
-    path: '/:catchAll(.*)', // 捕获所有未匹配路由，重定向到首页
-    redirect: '/',
+    path: '/page/404',
+    name: 'NotFound',
+    component: NotFoundView,
+  },
+  {
+    path: '/:catchAll(.*)', // 未匹配路径（含无效活动 ID）→ 主题化 404 页面
+    redirect: { name: 'NotFound' },
   },
 ];
 
