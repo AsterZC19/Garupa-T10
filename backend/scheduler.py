@@ -1,5 +1,6 @@
 # backend/scheduler.py
 import logging
+import os
 import threading
 import time
 from datetime import datetime, timedelta
@@ -377,12 +378,44 @@ def _prune_event_data(event, app):
         db.session.rollback()
 
 
+def vacuum_databases(app):
+    """定期 VACUUM SQLite 库文件，回收删除行未归还的磁盘空间。
+
+    SQLite 删除行不会自动缩小 .db 文件；活动历史被 _prune_event_data 裁剪后，
+    空间要等 VACUUM 才真正释放。VACUUM 不能在任何事务内执行，故用 AUTOCOMMIT
+    连接跑；运行期间会短暂锁库，所以只在「没有任何活动进行中」的日子才真正
+    执行（避开逐分钟写入关键期），其余日子跳过、等下次空档。
+    """
+    with app.app_context():
+        now = now_ms()
+        active_events = Event.query.filter(
+            Event.event_id != '5001',
+            Event.start_at <= now,
+            Event.end_at >= now,
+        ).count()
+        if active_events:
+            logging.info(f"VACUUM skipped: {active_events} active event(s) in progress.")
+            return
+
+        for bind_name, engine in db.engines.items():
+            try:
+                before = os.path.getsize(engine.url.database) if engine.url.database else 0
+                with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+                    conn.exec_driver_sql("VACUUM")
+                after = os.path.getsize(engine.url.database) if engine.url.database else 0
+                logging.info(f"VACUUM done for bind '{bind_name}': "
+                             f"{before/1024/1024:.1f} MB -> {after/1024/1024:.1f} MB")
+            except Exception as e:
+                logging.error(f"VACUUM failed for bind '{bind_name}': {e}", exc_info=True)
+
+
 def init_scheduler(app):
     """Initializes and starts the scheduler with aligned job start times."""
     executors = {
         'default': ThreadPoolExecutor(1),
         'priority': ThreadPoolExecutor(1),
         'heatmap': ThreadPoolExecutor(1),
+        'maintenance': ThreadPoolExecutor(1),
     }
     scheduler = BackgroundScheduler(executors=executors, daemon=True)
 
@@ -398,8 +431,11 @@ def init_scheduler(app):
     scheduler.add_job(refresh_heatmap_cache, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='heatmap', max_instances=1)
     # 月榜任务
     scheduler.add_job(refresh_monthly_master, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='default', max_instances=1)
-    scheduler.add_job(record_monthly_top_10, 'interval', args=[app], minutes=5, start_date=next_minute, misfire_grace_time=60, executor='priority', max_instances=1)
+    scheduler.add_job(record_monthly_top_10, 'interval', args=[app], minutes=1, start_date=next_minute, misfire_grace_time=60, executor='priority', max_instances=1)
     scheduler.add_job(refresh_monthly_heatmap_cache, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='heatmap', max_instances=1)
+    # 维护任务：每天低峰检查，仅在没有活动进行中的日子执行 VACUUM，
+    # 回收被裁剪数据占用的磁盘空间（有活动时跳过，等下次空档）
+    scheduler.add_job(vacuum_databases, 'cron', args=[app], hour=5, minute=12, misfire_grace_time=3600, executor='maintenance', max_instances=1)
     # Immediate startup jobs (non-blocking, run 3s after scheduler starts)
     scheduler.add_job(discover_new_events, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='default', max_instances=1)
     scheduler.add_job(update_t10_achievements, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='default', max_instances=1)
