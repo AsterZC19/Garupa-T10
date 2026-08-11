@@ -13,8 +13,9 @@ from services import tracker_client, monthly_repository as repo
 from services.tracker_client import TrackerError
 
 BESTDORI = "https://bestdori.com"
-# 月榜头图：Bestdori 资源探索器路径 jp/event/{asset}/images
-MONTHLY_BANNER_PATH = "/assets/jp/event/{asset}/images_rip/banner.png"
+# 月榜头图：Bestdori 资源探索器路径 jp/event/{asset}/images 下的 logo.png
+# （banner.png 在所有月份都是同一张占位图，logo.png 才是各月专属月榜图）
+MONTHLY_BANNER_PATH = "/assets/jp/event/{asset}/images_rip/logo.png"
 
 
 def resolve_banner_url(asset_bundle_name):
