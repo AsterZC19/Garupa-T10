@@ -10,12 +10,12 @@ import json
 from collections import defaultdict
 
 from services import monthly_repository as repo
-from services.event_query_service import (
+from services.heatmap_time import (
     HEATMAP_MAX_HOURS,
     _activity_counts_by_uid,
     _heatmap_window,
-    _hour_floor,
     _hour_to_utc_ms,
+    covers_window,
 )
 
 TOP_UID_COUNT = 10
@@ -74,6 +74,4 @@ def compute_monthly_heatmap_cache(monthly_id, hours=HEATMAP_MAX_HOURS):
 def monthly_heatmap_cache_covers_window(monthly_id, end_at_ms):
     """缓存是否已覆盖到月榜结束小时（用于已结束月榜只算一次）。"""
     latest_ref_ts = repo.get_monthly_heatmap_latest_ref_ts(monthly_id)
-    if latest_ref_ts is None:
-        return False
-    return latest_ref_ts >= _hour_to_utc_ms(_hour_floor(end_at_ms))
+    return covers_window(latest_ref_ts, end_at_ms)

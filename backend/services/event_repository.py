@@ -1,10 +1,6 @@
-from datetime import datetime
 from sqlalchemy import Integer, cast, func
 from models import db, Event, Score, ChartPoint, PlayerScoreHistory, EventHeatmapCache
-
-
-def now_ms():
-    return int(datetime.utcnow().timestamp() * 1000)
+from services.timeutil import now_ms
 
 
 def serialize_event(event):

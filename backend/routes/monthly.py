@@ -10,7 +10,6 @@
 - GET  /api/monthly/<monthly_id>/heatmap     → 48h 活跃热力图
 """
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
 import time
 
 from flask import Blueprint, current_app, jsonify, request
@@ -27,6 +26,8 @@ from services.monthly_query_service import (
     get_top_players,
 )
 from services.monthly_heatmap import compute_monthly_heatmap_cache
+from services.heatmap_time import HEATMAP_MAX_HOURS
+from services.timeutil import now_ms
 from services import monthly_repository as repo
 
 monthly_bp = Blueprint('monthly', __name__)
@@ -51,6 +52,20 @@ def _bg_top_refresh(app, monthly_id):
         app.logger.error(f"Monthly top refresh failed for {monthly_id}: {e}")
 
 
+def _bg_backfill(app, monthly_id):
+    """后台回填全量历史点。与 _bg_top_refresh 共用单线程 executor，
+    串行执行，避免首次加载时与 top 刷新并发写库（IntegrityError / 锁冲突），
+    也不阻塞 HTTP 响应。"""
+    try:
+        with app.app_context():
+            app.logger.info(f"Monthly background backfill for {monthly_id}...")
+            backfill_monthly_history(monthly_id)
+            clear_monthly_query_cache()
+    except Exception as e:
+        _last_backfill[monthly_id] = 0
+        app.logger.error(f"Monthly backfill failed for {monthly_id}: {e}")
+
+
 def _bg_heatmap_refresh(app, monthly_id):
     try:
         with app.app_context():
@@ -62,10 +77,26 @@ def _bg_heatmap_refresh(app, monthly_id):
         app.logger.error(f"Monthly heatmap refresh failed for {monthly_id}: {e}")
 
 
+def _int_arg(value, default, min_value=None, max_value=None):
+    """安全解析 query 参数为 int：非法值回退默认，并夹在 [min_value, max_value] 内，
+    避免 '?limit=abc' / '?limit=' 等触发 ValueError → 500。"""
+    try:
+        val = int(value)
+    except (TypeError, ValueError):
+        val = default
+    if min_value is not None and val < min_value:
+        val = min_value
+    if max_value is not None and val > max_value:
+        val = max_value
+    return val
+
+
 def _ensure_master_ingested():
     """master list 缺数据或过期时同步拉取一次。"""
     now = time.time()
-    if repo.get_monthly(1) and now - _last_master_ingest['ts'] < MASTER_INGEST_TTL:
+    # 哨兵用「是否已有任意一期」而非 get_monthly(1)：tracker 数据里不一定有
+    # monthly_id=1（如新库只从最近几期开始），否则每个请求都会重拉整个 master。
+    if repo.count_monthly() > 0 and now - _last_master_ingest['ts'] < MASTER_INGEST_TTL:
         return True
     try:
         count = ingest_monthly_master_list()
@@ -74,7 +105,7 @@ def _ensure_master_ingested():
         return count > 0
     except Exception as e:
         current_app.logger.error(f"Monthly master ingest failed: {e}")
-        return repo.get_monthly(1) is not None
+        return repo.count_monthly() > 0
 
 
 @monthly_bp.route('/', methods=['GET'])
@@ -110,13 +141,13 @@ def get_monthly(monthly_id):
 
 @monthly_bp.route('/<int:monthly_id>/top_players', methods=['GET'])
 def get_monthly_top_players(monthly_id):
-    limit = int(request.args.get('limit', 10))
+    limit = _int_arg(request.args.get('limit'), 10, min_value=1, max_value=50)
     period = repo.get_monthly(monthly_id)
     if not period:
         return jsonify({'error': 'monthly not found'}), 404
 
-    now_ms = int(datetime.utcnow().timestamp() * 1000)
-    is_active = period.start_at <= now_ms <= period.end_at
+    current_time_ms = now_ms()
+    is_active = repo.is_monthly_period_active(period, current_time_ms)
     force_refresh = request.args.get('force') == 'true'
     now = time.time()
     last = _last_top_refresh.get(monthly_id, 0)
@@ -124,16 +155,12 @@ def get_monthly_top_players(monthly_id):
         _last_top_refresh[monthly_id] = now
         _refresh_executor.submit(_bg_top_refresh, current_app._get_current_object(), monthly_id)
 
-    # 该期月榜还没有任何历史点 → 同步回填一次（首屏即可见数据），否则后台回填
+    # 该期月榜还没有任何历史点 → 后台回填全量历史。回填与 top 刷新共用单线程
+    # executor 串行执行（不再在请求线程里同步回填，避免并发写库 + 阻塞响应）。
     if repo.get_monthly_last_stored_ts(monthly_id) == 0:
         if now - _last_backfill.get(monthly_id, 0) >= REFRESH_COOLDOWN:
             _last_backfill[monthly_id] = now
-            try:
-                current_app.logger.info(f"Monthly synchronous backfill for {monthly_id}...")
-                backfill_monthly_history(monthly_id)
-                clear_monthly_query_cache()
-            except Exception as e:
-                current_app.logger.error(f"Monthly synchronous backfill failed for {monthly_id}: {e}")
+            _refresh_executor.submit(_bg_backfill, current_app._get_current_object(), monthly_id)
 
     player_data = get_top_players(monthly_id, limit)
     if player_data is None:
@@ -151,20 +178,23 @@ def get_monthly_chart(monthly_id):
 
 @monthly_bp.route('/<int:monthly_id>/heatmap', methods=['GET'])
 def get_monthly_heatmap(monthly_id):
-    limit = int(request.args.get('limit', 10))
-    hours = int(request.args.get('hours', 48))
+    limit = _int_arg(request.args.get('limit'), 10, min_value=1, max_value=50)
+    hours = _int_arg(request.args.get('hours'), 48, min_value=1, max_value=HEATMAP_MAX_HOURS)
     uids_raw = request.args.get('uids', '')
     uids = [u for u in uids_raw.split(',') if u] if uids_raw else None
+
+    # 未知 monthly_id → 404，与 top_players / chart 一致（区别于「尚无缓存数据」的空负载）
+    period = repo.get_monthly(monthly_id)
+    if not period:
+        return jsonify({'error': 'monthly not found'}), 404
 
     result = get_heatmap(monthly_id, limit=limit, hours=hours, uids=uids)
 
     # 缓存为空且月榜进行中/近期结束 → 后台预计算（带冷却，不阻塞响应）
-    period = repo.get_monthly(monthly_id)
-    if result['ref_ts'] == 0 and period:
-        now_ms = int(datetime.utcnow().timestamp() * 1000)
-        worthwhile = (
-            period.start_at <= now_ms <= period.end_at
-            or (period.end_at > 0 and 0 < (now_ms - period.end_at) <= 7 * 24 * 3600 * 1000)
+    if result['ref_ts'] == 0:
+        current_time_ms = now_ms()
+        worthwhile = repo.is_monthly_period_active(period, current_time_ms) or (
+            period.end_at > 0 and 0 < (current_time_ms - period.end_at) <= 7 * 24 * 3600 * 1000
         )
         if worthwhile:
             now = time.time()

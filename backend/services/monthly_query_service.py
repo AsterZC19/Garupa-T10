@@ -2,20 +2,23 @@
 """月榜查询服务：top 玩家 / 曲线 / 热力图。逻辑与 event_query_service 对齐，
 数据源为月榜专用表（monthly_scores / monthly_chart_points / monthly_heatmap_cache）。
 """
-import json
 from collections import defaultdict
 
 from services import monthly_repository as repo
 from services.event_query_service import (
-    HEATMAP_DEFAULT_HOURS,
-    HEATMAP_MAX_HOURS,
-    HEATMAP_TIMEZONE,
     _downsample_points,
     find_closest_point,
     find_last_point_before,
     row_pt,
     row_timestamp,
 )
+from services.heatmap_time import (
+    HEATMAP_DEFAULT_HOURS,
+    HEATMAP_MAX_HOURS,
+    _empty_heatmap,
+    build_heatmap_response,
+)
+from services.timeutil import now_ms
 from services.ttl_cache import TTLCache
 
 top_players_cache = TTLCache(60)
@@ -44,9 +47,10 @@ def get_top_players(monthly_id, limit=10):
     if not period:
         return None
 
-    import time as _t
-    current_time_ms = int(_t.time() * 1000)
-    anchor_ts = current_time_ms if current_time_ms < period.end_at else period.end_at
+    current_time_ms = now_ms()
+    # end_at == 0 视为后端未提供结束时间，锚定到当前时刻（否则 end_ts=0、
+    # start_ts=-3600000、is_new 恒为 True，导致时速永远为 0）。
+    anchor_ts = current_time_ms if period.end_at == 0 or current_time_ms < period.end_at else period.end_at
     end_ts = (anchor_ts // 3600000) * 3600000
     start_ts = end_ts - 3600000
     is_new = period.start_at > start_ts
@@ -134,31 +138,10 @@ def get_chart_series(monthly_id, interval='15m'):
     return chart_cache.set(cache_key, series)
 
 
-def _parse_counts(counts_json):
-    if not counts_json:
-        return None
-    try:
-        parsed = json.loads(counts_json)
-        if isinstance(parsed, list):
-            return [int(c) for c in parsed]
-    except Exception:
-        return None
-    return None
-
-
-def _empty_heatmap(hours):
-    return {
-        'timezone': HEATMAP_TIMEZONE,
-        'hours': hours,
-        'ref_ts': 0,
-        'global_max': 0,
-        'players': {},
-    }
-
-
 def get_heatmap(monthly_id, limit=10, hours=HEATMAP_DEFAULT_HOURS, uids=None):
     """月榜 top N 玩家的 48h 活跃热力图（读 monthly_heatmap_cache）。
 
+    时间换算与响应组装与活动榜共用 services/heatmap_time.build_heatmap_response；
     结构与活动榜一致：players[uid].counts 数组 index 0 最旧，ref_ts 为最新格子起始 UTC ms。
     """
     hours = min(max(1, hours), HEATMAP_MAX_HOURS)
@@ -181,30 +164,4 @@ def get_heatmap(monthly_id, limit=10, hours=HEATMAP_DEFAULT_HOURS, uids=None):
     if not rows:
         return _empty_heatmap(hours)
 
-    stored = {}
-    ref_ts = 0
-    for uid, counts_json, row_ref_ts in rows:
-        counts = _parse_counts(counts_json)
-        if counts is None:
-            continue
-        stored[uid] = counts
-        if row_ref_ts and row_ref_ts > ref_ts:
-            ref_ts = row_ref_ts
-
-    global_max = 0
-    players = {}
-    for uid in target_uids:
-        counts = stored.get(uid)
-        if counts is None:
-            continue
-        counts = counts[-hours:]
-        players[uid] = {'counts': counts}
-        global_max = max(global_max, max(counts))
-
-    return heatmap_cache.set(cache_key, {
-        'timezone': HEATMAP_TIMEZONE,
-        'hours': hours,
-        'ref_ts': ref_ts,
-        'global_max': global_max,
-        'players': players,
-    })
+    return heatmap_cache.set(cache_key, build_heatmap_response(rows, target_uids, hours))

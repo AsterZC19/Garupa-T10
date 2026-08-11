@@ -13,6 +13,7 @@ from services.event_repository import get_all_event_ids, get_event_ids_with_hist
 from services.heatmap import compute_heatmap_cache, heatmap_cache_covers_window
 from services.monthly_ingestion import ingest_monthly_master_list, record_active_monthly_top
 from services.monthly_heatmap import compute_monthly_heatmap_cache, monthly_heatmap_cache_covers_window
+from services.timeutil import now_ms
 
 KEEP_MINUTES = 30  # minutes of per-minute data to keep per ended event
 
@@ -103,7 +104,7 @@ def update_t10_achievements(app):
                 db.session.commit()
 
             last_processed_event_id = int(last_processed_event_state.value)
-            current_time_ms = int(time.time() * 1000)
+            current_time_ms = now_ms()
 
             unprocessed_events = Event.query.filter(
                 Event.end_at < current_time_ms,
@@ -229,7 +230,7 @@ def refresh_heatmap_cache(app):
         return
     try:
         with app.app_context():
-            now = int(time.time() * 1000)
+            now = now_ms()
             events = Event.query.all()
             active = [e for e in events if e.start_at <= now <= e.end_at]
             ended = [e for e in events if e.end_at and e.end_at < now]
@@ -303,15 +304,16 @@ def refresh_monthly_heatmap_cache(app):
     try:
         with app.app_context():
             from models import MonthlyRanking
-            now = int(time.time() * 1000)
+            now = now_ms()
             periods = MonthlyRanking.query.all()
-            active = [p for p in periods if p.start_at <= now <= p.end_at]
+            # end_at == 0 视为后端未提供结束时间（按进行中处理，每小时重算）
+            active = [p for p in periods if p.start_at <= now and (p.end_at == 0 or p.end_at >= now)]
             ended = [p for p in periods if p.end_at and p.end_at < now]
             ended.sort(key=lambda p: p.end_at, reverse=True)
 
             for p in active + ended:
                 mid = p.monthly_id
-                needs = p.end_at >= now or not monthly_heatmap_cache_covers_window(mid, p.end_at)
+                needs = p.end_at == 0 or p.end_at >= now or not monthly_heatmap_cache_covers_window(mid, p.end_at)
                 if not needs:
                     continue
                 try:

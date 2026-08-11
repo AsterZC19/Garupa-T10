@@ -1,9 +1,9 @@
 # backend/routes/events.py
 from flask import Blueprint, jsonify, request, current_app
-from datetime import datetime
 import time
 from concurrent.futures import ThreadPoolExecutor
 from services.event_ingestion import TOP_PLAYERS_INTERVAL_MS, parse_and_store_event_data, refresh_event_top_data
+from services.timeutil import now_ms
 from services.event_query_service import (
     clear_event_query_cache,
     get_chart_series,
@@ -118,11 +118,11 @@ def get_event(event_id):
     elif not e:
         refresh_needed = True
     else:
-        now_ms = int(datetime.utcnow().timestamp() * 1000)
+        current_time_ms = now_ms()
         # Check if the event is ongoing or has ended recently (e.g., within the last 2 days) + 30 min grace period
         GRACE_PERIOD_MS = 30 * 60 * 1000 # 30 minutes in milliseconds
-        is_recent_or_ongoing = (e.end_at + GRACE_PERIOD_MS) > (now_ms - 2 * 24 * 3600 * 1000)
-        if is_recent_or_ongoing and (now_ms - e.updated_at) > (15 * 60 * 1000):
+        is_recent_or_ongoing = (e.end_at + GRACE_PERIOD_MS) > (current_time_ms - 2 * 24 * 3600 * 1000)
+        if is_recent_or_ongoing and (current_time_ms - e.updated_at) > (15 * 60 * 1000):
             refresh_needed = True
 
     if refresh_needed:
@@ -181,8 +181,8 @@ def get_top_players(event_id):
 
     refresh_requested = request.args.get('refresh') == 'true'
     force_refresh = request.args.get('force') == 'true'
-    now_ms = int(datetime.utcnow().timestamp() * 1000)
-    is_active = event.start_at <= now_ms <= event.end_at
+    current_time_ms = now_ms()
+    is_active = event.start_at <= current_time_ms <= event.end_at
     now = time.time()
     last_refresh = _last_top_players_refresh_time.get(event_id, 0)
     can_refresh = force_refresh or now - last_refresh >= REFRESH_COOLDOWN
@@ -202,12 +202,12 @@ def _heatmap_refresh_worthwhile(event_id):
     event = find_event(event_id)
     if not event:
         return False
-    now_ms = int(datetime.utcnow().timestamp() * 1000)
-    if event.start_at > now_ms:  # 未开始：Bestdori 还没有数据，没必要刷
+    current_time_ms = now_ms()
+    if event.start_at > current_time_ms:  # 未开始：Bestdori 还没有数据，没必要刷
         return False
-    if event.end_at >= now_ms:  # 进行中
+    if event.end_at >= current_time_ms:  # 进行中
         return True
-    return event.end_at > 0 and (now_ms - event.end_at) <= 7 * 24 * 3600 * 1000
+    return event.end_at > 0 and (current_time_ms - event.end_at) <= 7 * 24 * 3600 * 1000
 
 
 @events_bp.route('/<string:event_id>/heatmap', methods=['GET'])

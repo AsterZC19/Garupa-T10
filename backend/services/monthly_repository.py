@@ -5,10 +5,7 @@ import json
 from sqlalchemy import func
 from sqlalchemy import Integer, cast
 from models import db, MonthlyRanking, MonthlyScore, MonthlyChartPoint, MonthlyHeatmapCache
-
-
-def now_ms():
-    return int(__import__('datetime').datetime.utcnow().timestamp() * 1000)
+from services.timeutil import now_ms
 
 
 def serialize_monthly(period):
@@ -32,12 +29,28 @@ def get_monthly(monthly_id):
 
 def get_current_or_latest_monthly():
     now = now_ms()
+    # end_at == 0 视为后端未提供结束时间（按进行中处理）
     current = MonthlyRanking.query.filter(
-        MonthlyRanking.start_at <= now, MonthlyRanking.end_at >= now
+        MonthlyRanking.start_at <= now,
+        (MonthlyRanking.end_at == 0) | (MonthlyRanking.end_at >= now),
     ).order_by(MonthlyRanking.monthly_id.desc()).first()
     if current:
         return current
     return MonthlyRanking.query.order_by(MonthlyRanking.monthly_id.desc()).first()
+
+
+def is_monthly_period_active(period, now_ts=None):
+    """月榜是否进行中。end_at == 0 视为后端未提供结束时间，按进行中处理。"""
+    if period is None:
+        return False
+    now = now_ts if now_ts is not None else now_ms()
+    if period.start_at and period.start_at > now:
+        return False
+    return period.end_at == 0 or now <= period.end_at
+
+
+def count_monthly():
+    return MonthlyRanking.query.count()
 
 
 def upsert_monthly(monthly_id, name, start_at, end_at, banner_url=None, description=None):
@@ -177,6 +190,19 @@ def get_monthly_last_stored_ts(monthly_id):
         monthly_id=int(monthly_id)
     ).first()
     return row[0] or 0 if row else 0
+
+
+def get_monthly_last_stored_ts_by_uid(monthly_id):
+    """各 uid 已存储的最大快照时间戳，返回 {uid: max_ts}。
+
+    用于增量刷新时按玩家各自的时间戳过滤，避免用全局 max 把新进榜玩家
+    进榜前的历史点一并丢弃。
+    """
+    rows = db.session.query(
+        MonthlyChartPoint.uid,
+        func.max(MonthlyChartPoint.timestamp),
+    ).filter_by(monthly_id=int(monthly_id)).group_by(MonthlyChartPoint.uid).all()
+    return {uid: (ts or 0) for uid, ts in rows}
 
 
 def replace_monthly_heatmap_cache(monthly_id, rows):

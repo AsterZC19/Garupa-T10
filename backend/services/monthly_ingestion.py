@@ -7,9 +7,8 @@
 
 tracker 后端已持有官方 API 的设备签名，我们这边无需再连官方接口。
 """
-import time
-
 from services import tracker_client, monthly_repository as repo
+from services.timeutil import now_ms
 from services.tracker_client import TrackerError
 
 BESTDORI = "https://bestdori.com"
@@ -81,7 +80,7 @@ def _latest_scores_from_snapshot(monthly_id, points, users):
         if uid not in latest_by_uid or ts > latest_by_uid[uid][0]:
             latest_by_uid[uid] = (ts, val)
 
-    now_ts = int(time.time() * 1000)
+    now_ts = now_ms()
     rows = []
     for uid, (ts, pt) in latest_by_uid.items():
         u = user_map.get(uid, {})
@@ -126,15 +125,17 @@ def refresh_monthly_top(monthly_id):
     if score_rows:
         repo.replace_monthly_scores(monthly_id, score_rows)
 
-    # --- 增量追加曲线点（仅新时间戳，去重） ---
-    last_ts = repo.get_monthly_last_stored_ts(monthly_id)
+    # --- 增量追加曲线点（按玩家各自已有时间戳过滤，去重） ---
+    # 用 per-uid 的 max ts 而不是全局 max：否则月中才进 top 的新玩家，
+    # 其进榜前的历史点（ts <= 全局 last_ts）会被一并丢弃。
+    last_ts_by_uid = repo.get_monthly_last_stored_ts_by_uid(monthly_id)
     name_map = _user_name_map(users)
     new_points = []
     for p in points:
         ts = int(p.get('time') or p.get('timestamp') or 0)
-        if ts <= last_ts:
-            continue
         uid = str(p.get('uid'))
+        if ts <= last_ts_by_uid.get(uid, 0):
+            continue
         new_points.append({
             'uid': uid,
             'name': name_map.get(uid, ''),
@@ -175,11 +176,16 @@ def backfill_monthly_history(monthly_id):
 
 
 def record_active_monthly_top():
-    """刷新当前进行中的月榜。返回写入点数（无进行中月榜返回 0）。"""
+    """刷新当前进行中的月榜。返回写入点数（无进行中月榜返回 0）。
+
+    只在「已开始且未结束」时刷新：
+    - end_at > 0 且已过 → 本期已结束，榜单已冻结，不再轮询（避免每 5 分钟
+      对已结束月榜空转拉取 + 全量重写）。
+    - end_at == 0 → 后端未提供结束时间，视为进行中，照常刷新。
+    """
     current = repo.get_current_or_latest_monthly()
     if not current:
         return 0
-    now_ms = int(time.time() * 1000)
-    if current.start_at > now_ms:  # 尚未开始
-        return 0
+    if not repo.is_monthly_period_active(current):
+        return 0  # 未开始或已结束
     return refresh_monthly_top(current.monthly_id)

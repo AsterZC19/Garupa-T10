@@ -3,7 +3,7 @@ import bisect
 from models import PlayerScoreHistory, Event
 from collections import defaultdict
 from services.ttl_cache import TTLCache
-from datetime import datetime
+from services.timeutil import now_ms
 
 hourly_stats_cache = TTLCache(300)  # 5-minute cache for active events
 hourly_stats_cache_ended = TTLCache(3600)  # 1-hour cache for ended events
@@ -105,7 +105,7 @@ def calculate_hourly_stats(event_id):
     result = sorted(hourly_stats, key=lambda x: x['hour_timestamp'])
 
     # Use longer cache for ended events
-    now_ms = int(datetime.utcnow().timestamp() * 1000)
-    if event.end_at > 0 and now_ms > event.end_at + 2 * 24 * 3600 * 1000:
+    current_time_ms = now_ms()
+    if event.end_at > 0 and current_time_ms > event.end_at + 2 * 24 * 3600 * 1000:
         return hourly_stats_cache_ended.set(event_id_str, result)
     return hourly_stats_cache.set(event_id_str, result)

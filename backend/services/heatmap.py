@@ -11,12 +11,12 @@ from collections import defaultdict
 
 from services import event_repository as repo
 from services.bestdori_client import client
-from services.event_query_service import (
+from services.heatmap_time import (
     HEATMAP_MAX_HOURS,
     _activity_counts_by_uid,
     _heatmap_window,
-    _hour_floor,
     _hour_to_utc_ms,
+    covers_window,
 )
 
 TOP_UID_COUNT = 10  # 只缓存前 N 名玩家的热力图
@@ -82,6 +82,4 @@ def compute_heatmap_cache(event_id, hours=HEATMAP_MAX_HOURS):
 def heatmap_cache_covers_window(event_id, end_at_ms):
     """该活动已有缓存是否已覆盖到结束小时（用于已结束活动只算一次）。"""
     latest_ref_ts = repo.get_heatmap_cache_latest_ref_ts(event_id)
-    if latest_ref_ts is None:
-        return False
-    return latest_ref_ts >= _hour_to_utc_ms(_hour_floor(end_at_ms))
+    return covers_window(latest_ref_ts, end_at_ms)

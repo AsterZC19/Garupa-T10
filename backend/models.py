@@ -2,10 +2,9 @@
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
-from datetime import datetime
 
-def now_ms():
-    return int(datetime.utcnow().timestamp() * 1000)
+# 统一的时间基准（全项目唯一实现，见 services/timeutil.py）
+from services.timeutil import now_ms
 
 class Event(db.Model):
     __tablename__ = 'events'
