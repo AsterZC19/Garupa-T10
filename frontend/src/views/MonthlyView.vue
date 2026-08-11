@@ -1,19 +1,17 @@
 <template>
   <div class="p-4 sm:p-6 max-w-7xl mx-auto">
-    <!-- 顶部：切换 + 月榜选择 + 刷新 -->
-    <header class="flex items-center justify-between mb-4 gap-2">
-      <div class="flex items-center gap-3 min-w-0">
-        <ModeToggle model-value="monthly" @update:model-value="goEvent" />
-        <MdSelect
-          :options="monthlyOptions"
-          v-model="selectedMonthlyId"
-          class="w-full max-w-[300px] sm:max-w-sm"
-          placeholder="选择月榜"
-        />
-      </div>
-      <button @click="forceRefresh" :disabled="isRefreshing || isUpcoming" class="md-filled-button flex-shrink-0 min-w-28">
+    <!-- 顶部：切换 + 刷新同一行；移动端月榜选择框换行到下一行 -->
+    <header class="flex flex-wrap items-center justify-between gap-2 mb-4">
+      <ModeToggle model-value="monthly" @update:model-value="goEvent" class="order-1" />
+      <button @click="forceRefresh" :disabled="isRefreshing || isUpcoming" class="md-filled-button flex-shrink-0 min-w-28 order-2 md:order-3">
         <span>{{ refreshButtonText }}</span>
       </button>
+      <MdSelect
+        :options="monthlyOptions"
+        v-model="selectedMonthlyId"
+        class="w-full max-w-[300px] sm:max-w-sm order-3 md:order-2 md:w-auto md:flex-1"
+        placeholder="选择月榜"
+      />
     </header>
 
     <!-- 月榜信息卡 -->

@@ -1,14 +1,12 @@
 <template>
   <div class="p-4 sm:p-6 max-w-7xl mx-auto">
-    <!-- 顶部：活动选择 + 刷新 -->
-    <header class="flex items-center justify-between mb-4 gap-2">
-      <div class="flex items-center gap-3 min-w-0">
-        <ModeToggle model-value="event" @update:model-value="goMonthly" />
-        <EventSelector :events="events" v-model="selectedEventId" class="w-full" />
-      </div>
-      <button @click="forceRefresh" :disabled="isRefreshing || isUpcoming" class="md-filled-button flex-shrink-0 min-w-28">
+    <!-- 顶部：切换 + 刷新同一行；移动端活动选择框换行到下一行 -->
+    <header class="flex flex-wrap items-center justify-between gap-2 mb-4">
+      <ModeToggle model-value="event" @update:model-value="goMonthly" class="order-1" />
+      <button @click="forceRefresh" :disabled="isRefreshing || isUpcoming" class="md-filled-button flex-shrink-0 min-w-28 order-2 md:order-3">
         <span>{{ refreshButtonText }}</span>
       </button>
+      <EventSelector :events="events" v-model="selectedEventId" class="w-full order-3 md:order-2 md:w-auto md:flex-1" />
     </header>
 
     <!-- 活动信息卡 -->
