@@ -1,19 +1,23 @@
 # backend/routes/events.py
 from flask import Blueprint, jsonify, request, current_app
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from services.event_ingestion import TOP_PLAYERS_INTERVAL_MS, parse_and_store_event_data, refresh_event_top_data
 from services.timeutil import now_ms
 from services.event_query_service import (
     clear_event_query_cache,
+    clear_event_heatmap_cache,
     get_chart_series,
     get_heatmap,
     get_top_players as get_top_players_data,
 )
-from services.heatmap import compute_heatmap_cache
+from services.heatmap import compute_heatmap_cache, compute_event_heatmap_cache_from_db
 from services.event_repository import (
     get_current_or_latest_event,
     get_event as find_event,
+    get_event_last_stored_ts,
+    get_event_heatmap_latest_updated_at,
     get_scores as find_scores,
     list_events as find_events,
     serialize_event,
@@ -28,6 +32,7 @@ _refresh_executor = ThreadPoolExecutor(max_workers=1)
 _last_refresh_time = {}
 _last_top_players_refresh_time = {}
 _last_heatmap_refresh_time = {}
+_heatmap_compute_lock = threading.Lock()
 REFRESH_COOLDOWN = 30  # 30 seconds
 MAX_CACHED_REFRESH_TIMES = 50
 
@@ -73,11 +78,30 @@ def _bg_refresh_heatmap(app, event_id):
     try:
         with app.app_context():
             app.logger.info(f"Background heatmap refresh for event {event_id}...")
-            compute_heatmap_cache(event_id)
+            with _heatmap_compute_lock:
+                compute_heatmap_cache(event_id)
             clear_event_query_cache()
     except Exception as e:
         _last_heatmap_refresh_time[event_id] = 0
         app.logger.error(f"Background heatmap refresh failed for event {event_id}: {e}")
+
+
+def _recompute_event_heatmap_if_stale(event_id):
+    """进行中的活动热力图按需重算：有新逐分钟快照且缓存未覆盖时，同步重算并清内存缓存。
+
+    读本地 PlayerScoreHistory（逐分钟落库），不请求 Bestdori；以「最新快照时间 >
+    缓存写入时间」判断过期，使页面每次自动刷新都能看到热力图跟着最新快照更新
+    （不再等整点）。已结束的活动数据冻结/被裁剪，不在此重算（由调度器算一次）。
+    """
+    with _heatmap_compute_lock:
+        max_history_ts = get_event_last_stored_ts(event_id)
+        if not max_history_ts:
+            return
+        cache_updated_at = get_event_heatmap_latest_updated_at(event_id)
+        if cache_updated_at is not None and max_history_ts <= cache_updated_at:
+            return  # 缓存已覆盖最新快照，无需重算
+        if compute_event_heatmap_cache_from_db(event_id) is not None:
+            clear_event_heatmap_cache()
 
 
 def _ensure_event(event_id):
@@ -224,6 +248,13 @@ def get_heatmap_route(event_id):
     hours = int(request.args.get('hours', 48))
     uids_raw = request.args.get('uids', '')
     uids = [u for u in uids_raw.split(',') if u] if uids_raw else None
+
+    current_time_ms = now_ms()
+    event = find_event(event_id)
+    # 进行中的活动：有新逐分钟快照就同步重算热力图缓存（读本地库、不请求 Bestdori），
+    # 页面每次自动刷新都能看到热力图跟着最新快照更新，不再等整点预计算。
+    if event and event.start_at <= current_time_ms and (event.end_at == 0 or event.end_at >= current_time_ms):
+        _recompute_event_heatmap_if_stale(event_id)
 
     result = get_heatmap(event_id, limit=limit, hours=hours, uids=uids)
 

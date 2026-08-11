@@ -427,6 +427,25 @@ def get_heatmap_cache_latest_ref_ts(event_id):
         return None
 
 
+def get_event_last_stored_ts(event_id):
+    """该活动已存储的最大逐分钟快照时间戳；无数据返回 0。用于按需重算判断。"""
+    row = db.session.query(func.max(PlayerScoreHistory.timestamp)).filter_by(
+        event_id=str(event_id)
+    ).first()
+    return row[0] or 0 if row else 0
+
+
+def get_event_heatmap_latest_updated_at(event_id):
+    """缓存最近一次写入时间（ms）。无缓存返回 None。用于按需重算判断。"""
+    try:
+        row = EventHeatmapCache.query.filter_by(event_id=str(event_id)).order_by(
+            EventHeatmapCache.updated_at.desc()
+        ).first()
+        return row.updated_at if row else None
+    except Exception:
+        return None
+
+
 def get_duplicate_history_points(limit=100):
     return db.session.query(
         PlayerScoreHistory.event_id,

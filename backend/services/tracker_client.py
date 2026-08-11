@@ -26,7 +26,7 @@ GARUPA_TRACKER_BASE = os.environ.get('GARUPA_TRACKER_BASE', 'http://127.0.0.1:55
 TRACKER_SERVER = int(os.environ.get('GARUPA_TRACKER_SERVER', '0'))
 TRACKER_TIMEOUT = int(os.environ.get('GARUPA_TRACKER_TIMEOUT', '30'))
 
-# 短 TTL 缓存：避免前端频繁请求时反复打 tracker 后端
+# 短 TTL 缓存：避免前端频繁请求时反复请求 tracker 后端
 _info_cache = TTLCache(300)
 _top_cache = TTLCache(30)
 

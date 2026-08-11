@@ -25,6 +25,11 @@ def clear_event_query_cache():
     heatmap_cache.clear()
 
 
+def clear_event_heatmap_cache():
+    """只清热力图内存缓存：热力图按需重算后，让下一次读取拿到新缓存。"""
+    heatmap_cache.clear()
+
+
 def row_timestamp(row):
     return row.timestamp
 
