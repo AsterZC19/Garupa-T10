@@ -277,8 +277,9 @@ async function loadMonthlyList() {
 }
 
 watch(selectedMonthlyId, (newId) => {
+  // 用路径导航（/monthly/{id}），确保路由参数更新触发加载
   if (newId && String(newId) !== String(route.params.monthlyId)) {
-    router.push({ name: 'Monthly', params: { monthlyId: String(newId) } })
+    router.push(`/monthly/${String(newId)}`)
   }
 })
 
@@ -303,13 +304,13 @@ onMounted(async () => {
     try {
       const cur = await api.get('/api/monthly/current')
       if (cur.status === 200 && cur.data.monthly_id) {
-        router.replace({ name: 'Monthly', params: { monthlyId: String(cur.data.monthly_id) } })
+        router.replace(`/monthly/${cur.data.monthly_id}`)
       } else if (list.length > 0) {
-        router.replace({ name: 'Monthly', params: { monthlyId: String(list[0].monthly_id) } })
+        router.replace(`/monthly/${list[0].monthly_id}`)
       }
     } catch (error) {
       if (list.length > 0) {
-        router.replace({ name: 'Monthly', params: { monthlyId: String(list[0].monthly_id) } })
+        router.replace(`/monthly/${list[0].monthly_id}`)
       }
     }
   }

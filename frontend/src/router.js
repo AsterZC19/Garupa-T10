@@ -17,15 +17,10 @@ const routes = [
     props: true, // 让 eventId 直接作为 props 传入组件
   },
   {
-    path: '/monthly',
+    path: '/monthly/:monthlyId(\\d+)?',
     name: 'Monthly',
     component: MonthlyView,
-  },
-  {
-    path: '/monthly/:monthlyId(\\d+)',
-    name: 'MonthlyDetail',
-    component: MonthlyView,
-    props: true, // monthlyId 直接作为 props
+    props: true, // monthlyId 直接作为 props（可选）
   },
   {
     path: '/player',
