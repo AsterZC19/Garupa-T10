@@ -88,16 +88,15 @@ def _latest_scores_from_snapshot(monthly_id, points, users):
             'uid': uid,
             'name': u.get('name') or '',
             'pt': pt,
-            'rank': int(u.get('rank') or 0),
+            'rank': 0,   # 位次由 PT 排序决定（tracker users 的 rank 字段不可靠）
             'signature': u.get('introduction') or '',
             'degree_id': None,
             'updated_at': ts or now_ts,
         })
-    # 按 PT 倒序补位次
+    # 按 PT 倒序定 T10 位次
     rows.sort(key=lambda r: r['pt'], reverse=True)
     for i, r in enumerate(rows, start=1):
-        if not r['rank']:
-            r['rank'] = i
+        r['rank'] = i
     return rows
 
 
