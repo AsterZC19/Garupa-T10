@@ -116,7 +116,7 @@ const isInitialLoad = ref(true)
 
 const monthlyOptions = computed(() =>
   (monthlyList.value || []).map(m => ({
-    value: m.monthly_id,
+    value: String(m.monthly_id),  // 与 selectedMonthlyId（字符串）严格匹配，和活动选择器一致
     label: `${m.monthly_id} - ${m.name || ''} (${formatTs(m.start_at)})`,
   }))
 )
