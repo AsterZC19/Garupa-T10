@@ -59,6 +59,7 @@ data.db
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # IDE settings
 .idea/

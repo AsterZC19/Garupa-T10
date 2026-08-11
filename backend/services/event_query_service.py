@@ -1,9 +1,13 @@
-import datetime as dt
-import json
 from collections import defaultdict
-from zoneinfo import ZoneInfo
-from datetime import datetime
+
 from services import event_repository as repo
+from services.heatmap_time import (
+    HEATMAP_DEFAULT_HOURS,
+    HEATMAP_MAX_HOURS,
+    _empty_heatmap,
+    build_heatmap_response,
+)
+from services.timeutil import now_ms
 from services.ttl_cache import TTLCache
 
 
@@ -12,12 +16,6 @@ chart_cache_ended = TTLCache(3600)  # 1 hour for long-ended events
 top_players_cache = TTLCache(60)
 heatmap_cache = TTLCache(60)
 MAX_CHART_POINTS_PER_SERIES = 300
-
-# 热力图按服务器本地墙钟小时对齐（日服活动），与 LiveBoost 的 hourly 时速榜一致
-HEATMAP_TIMEZONE = 'Asia/Tokyo'
-HEATMAP_TZ = ZoneInfo(HEATMAP_TIMEZONE)
-HEATMAP_DEFAULT_HOURS = 48
-HEATMAP_MAX_HOURS = 96
 
 
 def clear_event_query_cache():
@@ -79,10 +77,10 @@ def get_chart_series(event_id, interval='15m'):
         return cached
 
     event = repo.get_event(event_id)
-    now_ms = int(datetime.utcnow().timestamp() * 1000)
+    current_time_ms = now_ms()
     is_old_event = (
         event and event.end_at > 0
-        and now_ms > event.end_at + 24 * 3600 * 1000
+        and current_time_ms > event.end_at + 24 * 3600 * 1000
     )
 
     # Try pre-computed cache first — simple SELECT, no GROUP BY
@@ -132,7 +130,7 @@ def get_top_players(event_id, limit=10):
     if not event:
         return None
 
-    current_time_ms = int(datetime.now().timestamp() * 1000)
+    current_time_ms = now_ms()
     anchor_ts = current_time_ms if current_time_ms < event.end_at else event.end_at
     end_ts = (anchor_ts // 3600000) * 3600000
     start_ts = end_ts - 3600000
@@ -202,86 +200,9 @@ def get_top_players(event_id, limit=10):
 
 # ---------------------------------------------------------------------------
 # 48h 热力图
-# 逻辑移植自 LiveBoost 的 computeHourlyActivity：按服务器本地墙钟小时对齐，
+# 时间换算（东京墙钟小时对齐）与响应组装统一在 services/heatmap_time.py，
+# 事件榜与月榜共用同一套；这里只负责读缓存并调用 build_heatmap_response。
 # ---------------------------------------------------------------------------
-
-
-def _hour_floor(ts_ms):
-    """ts 落在的本地墙钟小时序号（自 epoch 起算，按 Asia/Tokyo 对齐）。"""
-    local = dt.datetime.fromtimestamp(ts_ms / 1000, HEATMAP_TZ)
-    # 把墙钟时刻当作 UTC 解释，得到连续的「本地小时序号」
-    wall_utc = dt.datetime(
-        local.year, local.month, local.day, local.hour,
-        tzinfo=dt.timezone.utc,
-    )
-    return int(wall_utc.timestamp()) // 3600
-
-
-def _hour_to_utc_ms(hour_index):
-    """东京墙钟小时序号 -> 该小时起始的真实 UTC 毫秒。
-
-    前端据此把每个热力图格子换算成浏览器本地时区展示，与「时速曲线」图一致。
-    """
-    wall_utc = dt.datetime.fromtimestamp(hour_index * 3600, dt.timezone.utc)
-    offset_ms = wall_utc.astimezone(HEATMAP_TZ).utcoffset().total_seconds() * 1000
-    return int(wall_utc.timestamp()) * 1000 - offset_ms
-
-
-def _heatmap_window(ref_now, hours):
-    """返回热力图覆盖的 (最旧, 最新) 墙钟小时序号。"""
-    newest = _hour_floor(ref_now)
-    return newest - (hours - 1), newest
-
-
-def _activity_counts_by_uid(pts_by_uid, ref_now, hours):
-    """按东京墙钟小时统计每位玩家「PT 创下新高」的次数（纯内存，不落库）。
-
-    pts_by_uid: uid -> [(timestamp_ms, pt), ...]（无序，内部会排序）
-    返回 uid -> list[int]，index 0 最旧、index hours-1 为最新小时。
-    """
-    oldest, newest = _heatmap_window(ref_now, hours)
-    result = {}
-    for uid, pts in pts_by_uid.items():
-        # 只保留基准时刻前的采样：活动结束后 Bestdori 仍会追踪一段冻结榜单，
-        # 剔除它们以免把窗口推后、或让最后一格多算
-        pts = [p for p in pts if p[0] <= ref_now]
-        if not pts:
-            continue
-        pts.sort(key=lambda x: x[0])
-        counts = [0] * hours
-        # 以「历史最高 PT」为基线：Bestdori 数据回拨造成的下跌不重复计数，
-        # 只有涨到新高才算一次活跃（否则 下跌-回升 会被误算成一次周回）
-        peak_pt = pts[0][1]
-        for cur_ts, cur_pt in pts[1:]:
-            if cur_pt > peak_pt:
-                h = _hour_floor(cur_ts)
-                if oldest <= h <= newest:
-                    counts[h - oldest] += 1
-                peak_pt = cur_pt
-        result[uid] = counts
-    return result
-
-
-def _empty_heatmap(hours):
-    return {
-        'timezone': HEATMAP_TIMEZONE,
-        'hours': hours,
-        'ref_ts': 0,
-        'global_max': 0,
-        'players': {},
-    }
-
-
-def _parse_counts(counts_json):
-    if not counts_json:
-        return None
-    try:
-        parsed = json.loads(counts_json)
-        if isinstance(parsed, list):
-            return [int(c) for c in parsed]
-    except Exception:
-        return None
-    return None
 
 
 def get_heatmap(event_id, limit=10, hours=HEATMAP_DEFAULT_HOURS, uids=None):
@@ -314,31 +235,4 @@ def get_heatmap(event_id, limit=10, hours=HEATMAP_DEFAULT_HOURS, uids=None):
     if not rows:
         return _empty_heatmap(hours)
 
-    stored = {}
-    ref_ts = 0
-    for uid, counts_json, row_ref_ts in rows:
-        counts = _parse_counts(counts_json)
-        if counts is None:
-            continue
-        stored[uid] = counts
-        if row_ref_ts and row_ref_ts > ref_ts:
-            ref_ts = row_ref_ts
-
-    # 颜色归一化只按目标玩家统计，避免榜外爆肝玩家拉高 global_max
-    global_max = 0
-    players = {}
-    for uid in target_uids:
-        counts = stored.get(uid)
-        if counts is None:
-            continue
-        counts = counts[-hours:]  # 缓存覆盖整段窗口，取最后 hours 格
-        players[uid] = {'counts': counts}
-        global_max = max(global_max, max(counts))
-
-    return heatmap_cache.set(cache_key, {
-        'timezone': HEATMAP_TIMEZONE,
-        'hours': hours,
-        'ref_ts': ref_ts,
-        'global_max': global_max,
-        'players': players,
-    })
+    return heatmap_cache.set(cache_key, build_heatmap_response(rows, target_uids, hours))

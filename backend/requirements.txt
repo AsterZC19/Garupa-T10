@@ -3,6 +3,7 @@ Flask_SQLAlchemy==3.0.3
 APScheduler==3.10.1
 requests==2.31.0
 python-dotenv==1.0.0
+pycryptodome==3.23.0
 pandas==2.2.3
 gunicorn
 honcho

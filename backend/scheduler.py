@@ -11,6 +11,9 @@ from services.bestdori_client import client
 from services.event_ingestion import backfill_event_history, parse_and_store_event_data, record_active_event_top_10
 from services.event_repository import get_all_event_ids, get_event_ids_with_history, backfill_chart_data_cache
 from services.heatmap import compute_heatmap_cache, heatmap_cache_covers_window
+from services.monthly_ingestion import ingest_monthly_master_list, record_active_monthly_top
+from services.monthly_heatmap import compute_monthly_heatmap_cache, monthly_heatmap_cache_covers_window
+from services.timeutil import now_ms
 
 KEEP_MINUTES = 30  # minutes of per-minute data to keep per ended event
 
@@ -101,7 +104,7 @@ def update_t10_achievements(app):
                 db.session.commit()
 
             last_processed_event_id = int(last_processed_event_state.value)
-            current_time_ms = int(time.time() * 1000)
+            current_time_ms = now_ms()
 
             unprocessed_events = Event.query.filter(
                 Event.end_at < current_time_ms,
@@ -227,7 +230,7 @@ def refresh_heatmap_cache(app):
         return
     try:
         with app.app_context():
-            now = int(time.time() * 1000)
+            now = now_ms()
             events = Event.query.all()
             active = [e for e in events if e.start_at <= now <= e.end_at]
             ended = [e for e in events if e.end_at and e.end_at < now]
@@ -252,6 +255,79 @@ def refresh_heatmap_cache(app):
                 time.sleep(1)  # 对 Bestdori 友好：首次回填会连续请求多个活动
     finally:
         _heatmap_lock.release()
+
+
+# ---------------------------------------------------------------------------
+# 月榜（月間ランキング）
+# ---------------------------------------------------------------------------
+
+
+def refresh_monthly_master(app):
+    """每小时拉取月榜 master list，发现新的一期并落库。"""
+    with app.app_context():
+        logging.info("Scheduler: Running refresh_monthly_master task...")
+        try:
+            count = ingest_monthly_master_list()
+            if count:
+                logging.info(f"Monthly master: upserted {count} periods.")
+            else:
+                logging.info("Monthly master: no periods returned.")
+        except Exception as e:
+            logging.error(f"Monthly master ingest failed: {e}", exc_info=True)
+            db.session.rollback()
+
+
+def record_monthly_top_10(app):
+    """每分钟刷新进行中的月榜 top 快照（官方 API）。"""
+    with app.app_context():
+        try:
+            inserted = record_active_monthly_top()
+            if inserted:
+                logging.info(f"Recorded {inserted} new monthly top history points.")
+        except Exception as e:
+            logging.error(f"An error occurred in record_monthly_top_10: {e}", exc_info=True)
+            db.session.rollback()
+
+
+_monthly_heatmap_lock = threading.Lock()
+
+
+def refresh_monthly_heatmap_cache(app):
+    """每小时从 monthly_chart_points 预计算月榜 top-10 热力图并落库。
+
+    - 进行中的月榜：每次重算（数据在变）。
+    - 已结束的月榜：只在缓存尚未覆盖到结束小时时算一次（数据已冻结）。
+    """
+    if not _monthly_heatmap_lock.acquire(blocking=False):
+        logging.info("Monthly heatmap refresh already running; skipping this tick.")
+        return
+    try:
+        with app.app_context():
+            from models import MonthlyRanking
+            now = now_ms()
+            periods = MonthlyRanking.query.all()
+            # end_at == 0 视为后端未提供结束时间（按进行中处理，每小时重算）
+            active = [p for p in periods if p.start_at <= now and (p.end_at == 0 or p.end_at >= now)]
+            ended = [p for p in periods if p.end_at and p.end_at < now]
+            ended.sort(key=lambda p: p.end_at, reverse=True)
+
+            for p in active + ended:
+                mid = p.monthly_id
+                needs = p.end_at == 0 or p.end_at >= now or not monthly_heatmap_cache_covers_window(mid, p.end_at)
+                if not needs:
+                    continue
+                try:
+                    inserted = compute_monthly_heatmap_cache(mid)
+                    if inserted:
+                        logging.info(f"Monthly heatmap: updated period {mid} ({inserted} players).")
+                    else:
+                        logging.info(f"Monthly heatmap: no data for period {mid}.")
+                except Exception as e:
+                    logging.error(f"Monthly heatmap: failed for period {mid}: {e}", exc_info=True)
+                    db.session.rollback()
+                time.sleep(1)
+    finally:
+        _monthly_heatmap_lock.release()
 
 
 def _prune_event_data(event, app):
@@ -320,10 +396,16 @@ def init_scheduler(app):
     scheduler.add_job(record_top_10_scores, 'interval', args=[app], minutes=1, start_date=next_minute, misfire_grace_time=60, executor='priority', max_instances=1)
     scheduler.add_job(backfill_all_events_history, 'date', args=[app], run_date=next_minute, misfire_grace_time=300, executor='default', max_instances=1)
     scheduler.add_job(refresh_heatmap_cache, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='heatmap', max_instances=1)
+    # 月榜任务
+    scheduler.add_job(refresh_monthly_master, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='default', max_instances=1)
+    scheduler.add_job(record_monthly_top_10, 'interval', args=[app], minutes=5, start_date=next_minute, misfire_grace_time=60, executor='priority', max_instances=1)
+    scheduler.add_job(refresh_monthly_heatmap_cache, 'interval', args=[app], hours=1, start_date=next_hour, misfire_grace_time=900, executor='heatmap', max_instances=1)
     # Immediate startup jobs (non-blocking, run 3s after scheduler starts)
     scheduler.add_job(discover_new_events, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='default', max_instances=1)
     scheduler.add_job(update_t10_achievements, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='default', max_instances=1)
     scheduler.add_job(refresh_heatmap_cache, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='heatmap', max_instances=1)
+    scheduler.add_job(refresh_monthly_master, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='default', max_instances=1)
+    scheduler.add_job(refresh_monthly_heatmap_cache, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='heatmap', max_instances=1)
 
     scheduler.start()
     logging.info("Scheduler started. Startup jobs scheduled to run immediately.")

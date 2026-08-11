@@ -17,15 +17,11 @@ import argparse
 import os
 import sys
 import time
-from datetime import datetime
 
 from app import app
 from models import db, Event, PlayerScoreHistory, ChartPoint, ChartDataCache
 from services.event_repository import backfill_chart_data_cache, get_event_ids_with_history
-
-
-def now_ms():
-    return int(datetime.utcnow().timestamp() * 1000)
+from services.timeutil import now_ms
 
 
 def get_db_size_mb():

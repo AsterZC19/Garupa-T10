@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import EventView from './views/EventView.vue';
+import MonthlyView from './views/MonthlyView.vue';
 import PlayerSearchView from './views/PlayerSearchView.vue';
 import NotFoundView from './views/NotFoundView.vue';
 
@@ -14,6 +15,12 @@ const routes = [
     name: 'Event',
     component: EventView,
     props: true, // 让 eventId 直接作为 props 传入组件
+  },
+  {
+    path: '/monthly/:monthlyId(\\d+)?',
+    name: 'Monthly',
+    component: MonthlyView,
+    props: true, // monthlyId 直接作为 props（可选）
   },
   {
     path: '/player',
