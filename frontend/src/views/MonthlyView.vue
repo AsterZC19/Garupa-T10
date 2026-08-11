@@ -31,11 +31,6 @@
               <span v-if="isUpcoming" class="md-chip">⏳ 未开始</span>
             </div>
           </div>
-          <div class="text-center text-xs text-md-on-surface-variant mt-3">
-            月榜数据由
-            <a href="https://bestdori.com" target="_blank" rel="noopener" class="underline hover:text-md-primary">Bestdori</a>
-            官方游戏接口提供
-          </div>
         </div>
         <div v-if="currentMonthly.banner_url" class="flex-shrink-0 flex items-center max-w-full">
           <img :src="currentMonthly.banner_url" alt="Monthly Ranking Banner" class="max-w-full h-auto rounded-xl" />
