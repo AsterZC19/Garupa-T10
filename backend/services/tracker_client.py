@@ -14,6 +14,13 @@ import requests
 
 from services.ttl_cache import TTLCache
 
+# 加载 backend/.env（若存在）中的 GARUPA_TRACKER_* 配置
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
+except Exception:
+    pass
+
 GARUPA_TRACKER_BASE = os.environ.get('GARUPA_TRACKER_BASE', 'http://127.0.0.1:5519/api').rstrip('/')
 # 服务器索引：0=jp
 TRACKER_SERVER = int(os.environ.get('GARUPA_TRACKER_SERVER', '0'))
