@@ -235,6 +235,17 @@ def get_monthly_heatmap_latest_ref_ts(monthly_id):
         return None
 
 
+def get_monthly_heatmap_latest_updated_at(monthly_id):
+    """缓存最近一次写入时间（ms）。无缓存返回 None。用于按需重算判断。"""
+    try:
+        row = MonthlyHeatmapCache.query.filter_by(monthly_id=int(monthly_id)).order_by(
+            MonthlyHeatmapCache.updated_at.desc()
+        ).first()
+        return row.updated_at if row else None
+    except Exception:
+        return None
+
+
 def delete_monthly_data(monthly_id):
     """清理某期月榜的全部本地数据（调试用）。"""
     monthly_id = int(monthly_id)

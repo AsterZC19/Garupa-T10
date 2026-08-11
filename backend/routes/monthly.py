@@ -10,6 +10,7 @@
 - GET  /api/monthly/<monthly_id>/heatmap     → 48h 活跃热力图
 """
 from concurrent.futures import ThreadPoolExecutor
+import threading
 import time
 
 from flask import Blueprint, current_app, jsonify, request
@@ -21,6 +22,7 @@ from services.monthly_ingestion import (
 )
 from services.monthly_query_service import (
     clear_monthly_query_cache,
+    clear_monthly_heatmap_cache,
     get_chart_series,
     get_heatmap,
     get_top_players,
@@ -37,6 +39,7 @@ _last_master_ingest = {'ts': 0}
 _last_top_refresh = {}
 _last_heatmap_refresh = {}
 _last_backfill = {}
+_heatmap_recompute_lock = threading.Lock()
 REFRESH_COOLDOWN = 30
 MASTER_INGEST_TTL = 3600  # master list 每小时刷新一次足够
 
@@ -70,11 +73,30 @@ def _bg_heatmap_refresh(app, monthly_id):
     try:
         with app.app_context():
             app.logger.info(f"Monthly background heatmap refresh for {monthly_id}...")
-            compute_monthly_heatmap_cache(monthly_id)
+            with _heatmap_recompute_lock:
+                compute_monthly_heatmap_cache(monthly_id)
             clear_monthly_query_cache()
     except Exception as e:
         _last_heatmap_refresh[monthly_id] = 0
         app.logger.error(f"Monthly heatmap refresh failed for {monthly_id}: {e}")
+
+
+def _recompute_monthly_heatmap_if_stale(monthly_id):
+    """进行中的月榜热力图按需重算：有新快照且缓存未覆盖时，同步重算并清内存缓存。
+
+    快照每分钟一条落库，页面每 2 分钟自动刷新；以「最新快照时间 > 缓存写入时间」
+    判断过期，使每次刷新都能拿到最新快照驱动的热力图（不再等整点）。已结束的月榜
+    数据冻结，不在此重算（由调度器算到结束小时即可）。重算带锁串行、很快。
+    """
+    with _heatmap_recompute_lock:
+        max_snapshot_ts = repo.get_monthly_last_stored_ts(monthly_id)
+        if not max_snapshot_ts:
+            return
+        cache_updated_at = repo.get_monthly_heatmap_latest_updated_at(monthly_id)
+        if cache_updated_at is not None and max_snapshot_ts <= cache_updated_at:
+            return  # 缓存已覆盖最新快照，无需重算
+        if compute_monthly_heatmap_cache(monthly_id) is not None:
+            clear_monthly_heatmap_cache()
 
 
 def _int_arg(value, default, min_value=None, max_value=None):
@@ -188,11 +210,16 @@ def get_monthly_heatmap(monthly_id):
     if not period:
         return jsonify({'error': 'monthly not found'}), 404
 
+    current_time_ms = now_ms()
+    # 进行中的月榜：有新快照（逐分钟）就同步重算热力图缓存，页面每次自动刷新
+    # 都能看到热力图跟着最新快照更新，不再等整点预计算。
+    if repo.is_monthly_period_active(period, current_time_ms):
+        _recompute_monthly_heatmap_if_stale(monthly_id)
+
     result = get_heatmap(monthly_id, limit=limit, hours=hours, uids=uids)
 
     # 缓存为空且月榜进行中/近期结束 → 后台预计算（带冷却，不阻塞响应）
     if result['ref_ts'] == 0:
-        current_time_ms = now_ms()
         worthwhile = repo.is_monthly_period_active(period, current_time_ms) or (
             period.end_at > 0 and 0 < (current_time_ms - period.end_at) <= 7 * 24 * 3600 * 1000
         )

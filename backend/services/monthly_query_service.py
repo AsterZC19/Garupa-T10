@@ -33,6 +33,11 @@ def clear_monthly_query_cache():
     heatmap_cache.clear()
 
 
+def clear_monthly_heatmap_cache():
+    """只清热力图内存缓存：热力图按需重算后，让下一次读取拿到新缓存。"""
+    heatmap_cache.clear()
+
+
 def get_top_players(monthly_id, limit=10):
     """月榜 top N：当前 PT + 上一整点时速/周回次数/平均PT（从逐次快照计算）。
 
