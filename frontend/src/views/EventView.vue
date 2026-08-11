@@ -2,7 +2,8 @@
   <div class="p-4 sm:p-6 max-w-7xl mx-auto">
     <!-- 顶部：活动选择 + 刷新 -->
     <header class="flex items-center justify-between mb-4 gap-2">
-      <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-3 min-w-0">
+        <ModeToggle model-value="event" @update:model-value="goMonthly" />
         <EventSelector :events="events" v-model="selectedEventId" class="w-full" />
       </div>
       <button @click="forceRefresh" :disabled="isRefreshing || isUpcoming" class="md-filled-button flex-shrink-0 min-w-28">
@@ -88,6 +89,7 @@
 <script setup>
 import api from '../api'
 import EventSelector from '../components/EventSelector.vue'
+import ModeToggle from '../components/ModeToggle.vue'
 import TopPlayersTable from '../components/TopPlayersTable.vue'
 import ChartComponent from '../components/ChartComponent.vue'
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
@@ -96,6 +98,10 @@ import { formatTs } from '../utils.js'
 
 const route = useRoute()
 const router = useRouter()
+
+function goMonthly() {
+  router.push({ name: 'Monthly' })
+}
 
 const events = ref([])
 const selectedEventId = ref(null)
