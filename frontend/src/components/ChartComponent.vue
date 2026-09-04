@@ -23,11 +23,11 @@
 
 <script setup>
 import { onMounted, onBeforeUnmount, watch, ref } from 'vue'
-import { Chart, registerables } from 'chart.js'
+import { Chart, LineController, LineElement, PointElement, TimeScale, LinearScale, Legend, Tooltip } from 'chart.js'
 import 'chartjs-adapter-date-fns';
 import { zhCN } from 'date-fns/locale';
 import zoomPlugin from 'chartjs-plugin-zoom';
-Chart.register(...registerables, zoomPlugin);
+Chart.register(LineController, LineElement, PointElement, TimeScale, LinearScale, Legend, Tooltip, zoomPlugin);
 
 const props = defineProps({
   series: Object,
@@ -278,8 +278,7 @@ onBeforeUnmount(() => {
 })
 
 // Shallow watch - only triggers when object references change
-watch(() => props.series, draw)
-watch(() => props.currentEvent, draw)
+watch([() => props.series, () => props.currentEvent], draw, { flush: 'post' })
 
 // 主题切换时重建图表（网格/文字颜色随 MD3 主题）
 const darkMedia = window.matchMedia('(prefers-color-scheme: dark)')

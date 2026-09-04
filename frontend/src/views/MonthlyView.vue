@@ -90,7 +90,7 @@ import ModeToggle from '../components/ModeToggle.vue'
 import MdSelect from '../components/MdSelect.vue'
 import TopPlayersTable from '../components/TopPlayersTable.vue'
 import ChartComponent from '../components/ChartComponent.vue'
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { shallowRef, ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { formatTs } from '../utils.js'
 
@@ -102,7 +102,7 @@ const selectedMonthlyId = ref(null)
 const currentMonthly = ref(null)
 const nowTs = ref(Date.now())
 const topPlayers = ref([])
-const chartSeries = ref({})
+const chartSeries = shallowRef({})
 const heatmapData = ref({ ref_ts: null, global_max: 0, players: {} })
 const lastTopPlayersContext = ref(null)
 const isInitialLoad = ref(true)

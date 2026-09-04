@@ -1,8 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import EventView from './views/EventView.vue';
-import MonthlyView from './views/MonthlyView.vue';
-import PlayerSearchView from './views/PlayerSearchView.vue';
-import NotFoundView from './views/NotFoundView.vue';
+const EventView = () => import('./views/EventView.vue');
+const MonthlyView = () => import('./views/MonthlyView.vue');
+const PlayerSearchView = () => import('./views/PlayerSearchView.vue');
+const NotFoundView = () => import('./views/NotFoundView.vue');
 
 const routes = [
   {

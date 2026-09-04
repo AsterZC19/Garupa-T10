@@ -6,6 +6,7 @@ from sqlalchemy import func
 from sqlalchemy import Integer, cast
 from models import db, MonthlyRanking, MonthlyScore, MonthlyChartPoint, MonthlyHeatmapCache
 from services.timeutil import now_ms
+from services.history_window import get_history_window
 
 
 def serialize_monthly(period):
@@ -173,7 +174,12 @@ def get_monthly_chart_points_aggregated(monthly_id, bucket_ms):
     ).order_by('bucket_ts').all()
 
 
-def get_monthly_history_for_uids(monthly_id, uids):
+def get_monthly_history_for_uids(monthly_id, uids, start_ts=None, end_ts=None):
+    if start_ts is not None and end_ts is not None:
+        return get_history_window(
+            MonthlyChartPoint, MonthlyChartPoint.monthly_id, int(monthly_id),
+            uids, start_ts, end_ts,
+        )
     return MonthlyChartPoint.query.with_entities(
         MonthlyChartPoint.uid,
         MonthlyChartPoint.timestamp,

@@ -5,13 +5,7 @@
 from collections import defaultdict
 
 from services import monthly_repository as repo
-from services.event_query_service import (
-    _downsample_points,
-    find_closest_point,
-    find_last_point_before,
-    row_pt,
-    row_timestamp,
-)
+from services.ranking_stats import _downsample_points, calculate_hourly_stats
 from services.heatmap_time import (
     HEATMAP_DEFAULT_HOURS,
     HEATMAP_MAX_HOURS,
@@ -65,7 +59,7 @@ def get_top_players(monthly_id, limit=10):
         return []
 
     uids = [s.uid for s in top_scores]
-    history = repo.get_monthly_history_for_uids(int(monthly_id), uids)
+    history = repo.get_monthly_history_for_uids(int(monthly_id), uids, start_ts, end_ts)
     by_uid = defaultdict(list)
     for record in history:
         by_uid[record.uid].append(record)
@@ -73,29 +67,9 @@ def get_top_players(monthly_id, limit=10):
     player_data = []
     for score in top_scores:
         player_history = by_uid[score.uid]
-        hourly_speed = 0
-        run_count = 0
-        average_pt = 0
-
-        if player_history and not is_new:
-            start_point = find_closest_point(player_history, start_ts)
-            end_point = find_closest_point(player_history, end_ts)
-            if start_point and end_point and row_timestamp(start_point) < row_timestamp(end_point):
-                time_diff_h = (row_timestamp(end_point) - row_timestamp(start_point)) / 3600000
-                if time_diff_h > 0:
-                    speed = (row_pt(end_point) - row_pt(start_point)) / time_diff_h
-                    hourly_speed = round(speed) if speed > 0 else 0
-
-            scores_in_hour = [r for r in player_history if start_ts <= row_timestamp(r) < end_ts]
-            if scores_in_hour:
-                last_before = find_last_point_before(player_history, start_ts)
-                last_pt = row_pt(last_before) if last_before else row_pt(scores_in_hour[0])
-                for record in scores_in_hour:
-                    if row_pt(record) > last_pt:
-                        run_count += 1
-                    last_pt = row_pt(record)
-            if run_count > 0:
-                average_pt = hourly_speed // run_count
+        hourly_speed, run_count, average_pt = calculate_hourly_stats(
+            player_history, start_ts, end_ts, is_new
+        )
 
         player_data.append({
             'uid': score.uid,

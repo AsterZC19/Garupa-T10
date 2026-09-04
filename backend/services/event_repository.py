@@ -1,6 +1,7 @@
 from sqlalchemy import Integer, cast, func
 from models import db, Event, Score, ChartPoint, PlayerScoreHistory, EventHeatmapCache
 from services.timeutil import now_ms
+from services.history_window import get_history_window
 
 
 def serialize_event(event):
@@ -138,7 +139,9 @@ def get_chart_data_cache(event_id, interval='15m'):
     """Read pre-computed chart data from cache table — simple SELECT, no GROUP BY."""
     try:
         from models import ChartDataCache
-        rows = ChartDataCache.query.filter_by(
+        rows = ChartDataCache.query.with_entities(
+            ChartDataCache.uid, ChartDataCache.name, ChartDataCache.bucket_ts, ChartDataCache.pt
+        ).filter_by(
             event_id=str(event_id),
             bucket_interval=interval
         ).order_by(ChartDataCache.bucket_ts.asc()).all()
@@ -171,14 +174,16 @@ def _update_chart_data_cache(event_id, changed_items):
             if key not in buckets or pt > buckets[key]['pt']:
                 buckets[key] = {'pt': pt, 'name': name}
 
-    # Fetch existing cache entries for the affected uids
-    affected_uids = list({k[0] for k in buckets})
+    # Only load buckets changed by this batch, using the composite primary key.
     try:
-        existing_rows = ChartDataCache.query.filter(
-            ChartDataCache.event_id == event_id,
-            ChartDataCache.uid.in_(affected_uids)
-        ).all()
-        existing = {(r.uid, r.bucket_interval, r.bucket_ts): r for r in existing_rows}
+        existing = {}
+        for keys in chunked(list(buckets), 250):
+            existing_rows = ChartDataCache.query.filter(
+                ChartDataCache.event_id == event_id,
+                db.tuple_(ChartDataCache.uid, ChartDataCache.bucket_interval,
+                          ChartDataCache.bucket_ts).in_(keys),
+            ).all()
+            existing.update({(r.uid, r.bucket_interval, r.bucket_ts): r for r in existing_rows})
     except Exception:
         existing = {}
 
@@ -369,7 +374,12 @@ def get_top_scores(event_id, limit):
     return Score.query.filter_by(event_id=str(event_id)).order_by(Score.pt.desc()).limit(limit).all()
 
 
-def get_history_for_uids(event_id, uids):
+def get_history_for_uids(event_id, uids, start_ts=None, end_ts=None):
+    if start_ts is not None and end_ts is not None:
+        return get_history_window(
+            PlayerScoreHistory, PlayerScoreHistory.event_id, str(event_id),
+            uids, start_ts, end_ts,
+        )
     return PlayerScoreHistory.query.with_entities(
         PlayerScoreHistory.uid,
         PlayerScoreHistory.timestamp,

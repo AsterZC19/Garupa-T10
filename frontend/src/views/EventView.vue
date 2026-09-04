@@ -90,7 +90,7 @@ import EventSelector from '../components/EventSelector.vue'
 import ModeToggle from '../components/ModeToggle.vue'
 import TopPlayersTable from '../components/TopPlayersTable.vue'
 import ChartComponent from '../components/ChartComponent.vue'
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { shallowRef, ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { formatTs } from '../utils.js'
 
@@ -107,7 +107,7 @@ const selectedHour = ref(null)
 const currentEvent = ref(null)
 const nowTs = ref(Date.now())   // 每秒更新，用于「活动暂未开始」倒计时
 const topPlayers = ref([])
-const chartSeries = ref({})
+const chartSeries = shallowRef({})
 const heatmapData = ref({ ref_ts: null, global_max: 0, players: {} })
 const lastTopPlayersContext = ref(null)
 const isInitialEventLoad = ref(true)

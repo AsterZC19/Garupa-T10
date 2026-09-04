@@ -1,5 +1,7 @@
 from collections import defaultdict
 
+from services.ranking_stats import _downsample_points, calculate_hourly_stats
+
 from services import event_repository as repo
 from services.heatmap_time import (
     HEATMAP_DEFAULT_HOURS,
@@ -28,48 +30,6 @@ def clear_event_query_cache():
 def clear_event_heatmap_cache():
     """只清热力图内存缓存：热力图按需重算后，让下一次读取拿到新缓存。"""
     heatmap_cache.clear()
-
-
-def row_timestamp(row):
-    return row.timestamp
-
-
-def row_pt(row):
-    return row.pt
-
-
-def _downsample_points(points, max_points):
-    """Downsample a sorted list of {t, pt} dicts to at most max_points, preserving peaks."""
-    if len(points) <= max_points:
-        return points
-
-    result = [points[0]]
-    remaining_slots = max_points - 2  # reserve for first and last
-    if remaining_slots <= 0:
-        result.append(points[-1])
-        return result
-
-    inner = points[1:-1]
-    bucket_size = max(1, len(inner) // remaining_slots)
-
-    for i in range(0, len(inner), bucket_size):
-        bucket = inner[i:i + bucket_size]
-        # pick the point with the highest pt in each bucket to preserve peaks
-        result.append(max(bucket, key=lambda p: p['pt']))
-
-    result.append(points[-1])
-    return result
-
-
-def find_closest_point(scores, target_ts):
-    if not scores:
-        return None
-    return min(scores, key=lambda score: abs(row_timestamp(score) - target_ts))
-
-
-def find_last_point_before(scores, target_ts):
-    relevant_scores = [score for score in scores if row_timestamp(score) < target_ts]
-    return relevant_scores[-1] if relevant_scores else None
 
 
 def get_chart_series(event_id, interval='15m'):
@@ -146,7 +106,7 @@ def get_top_players(event_id, limit=10):
         return []
 
     top_player_uids = [score.uid for score in top_scores]
-    history_records = repo.get_history_for_uids(event_id, top_player_uids)
+    history_records = repo.get_history_for_uids(event_id, top_player_uids, start_ts, end_ts)
 
     scores_by_uid = defaultdict(list)
     for record in history_records:
@@ -155,32 +115,9 @@ def get_top_players(event_id, limit=10):
     player_data = []
     for index, score in enumerate(top_scores):
         player_history = scores_by_uid[score.uid]
-        hourly_speed = 0
-        run_count = 0
-        average_pt = 0
-
-        if player_history and not is_new_event:
-            start_point = find_closest_point(player_history, start_ts)
-            end_point = find_closest_point(player_history, end_ts)
-
-            if start_point and end_point and row_timestamp(start_point) < row_timestamp(end_point):
-                time_diff_h = (row_timestamp(end_point) - row_timestamp(start_point)) / 3600000
-                if time_diff_h > 0:
-                    speed = (row_pt(end_point) - row_pt(start_point)) / time_diff_h
-                    hourly_speed = round(speed) if speed > 0 else 0
-
-            scores_in_hour = [record for record in player_history if start_ts <= row_timestamp(record) < end_ts]
-            if scores_in_hour:
-                last_score_before_hour = find_last_point_before(player_history, start_ts)
-                last_pt = row_pt(last_score_before_hour) if last_score_before_hour else row_pt(scores_in_hour[0])
-
-                for record in scores_in_hour:
-                    if row_pt(record) > last_pt:
-                        run_count += 1
-                    last_pt = row_pt(record)
-
-            if run_count > 0:
-                average_pt = hourly_speed // run_count
+        hourly_speed, run_count, average_pt = calculate_hourly_stats(
+            player_history, start_ts, end_ts, is_new_event
+        )
 
         player_data.append({
             'uid': score.uid,
