@@ -19,13 +19,16 @@ def init_name_history():
                     'ALTER TABLE player_name_history RENAME TO player_name_history_legacy')
             connection.execute(CreateTable(table, if_not_exists=True))
             if legacy:
-                # The old schema lost first-seen times and repeated name changes.
-                # Keep its observations without inventing first-seen timestamps.
+                # Preserve legacy ordering; missing times are filled once below.
                 connection.exec_driver_sql("""
                     INSERT INTO player_name_history (uid, name, first_seen, last_observed)
                     SELECT uid, name, NULL, last_seen FROM player_name_history_legacy
                     ORDER BY last_seen, uid, name
                 """)
+            # Also repair NULL times created by the previous migration version.
+            # Persist the fallback so reopening/restarting never refreshes it.
+            connection.execute(table.update().where(table.c.first_seen.is_(None))
+                               .values(first_seen=now_ms()))
             for index in table.indexes:
                 connection.execute(CreateIndex(index, if_not_exists=True))
             connection.commit()

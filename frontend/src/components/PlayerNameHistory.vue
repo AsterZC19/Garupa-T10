@@ -34,8 +34,7 @@
     <ul v-if="entries?.length" class="max-h-[min(20rem,calc(100dvh-10rem))] overflow-y-auto overscroll-contain divide-y divide-md-outline-variant">
       <li v-for="entry in entries" :key="entry.id" class="py-2 first:pt-0 last:pb-0">
         <p class="whitespace-pre-wrap break-all text-xs leading-4">{{ entry.name }}</p>
-        <time v-if="entry.first_seen != null" :datetime="new Date(entry.first_seen).toISOString()" class="mt-0.5 block text-[10px] leading-4 tabular-nums text-md-on-surface-variant">{{ new Date(entry.first_seen).toLocaleString('zh-CN', { hour12: false }) }}</time>
-        <span v-else class="mt-0.5 block text-[10px] leading-4 text-md-on-surface-variant">首次发现时间未知</span>
+        <time :datetime="new Date(entry.first_seen).toISOString()" class="mt-0.5 block text-[10px] leading-4 tabular-nums text-md-on-surface-variant">{{ new Date(entry.first_seen).toLocaleString('zh-CN', { hour12: false }) }}</time>
       </li>
     </ul>
     <p v-else class="text-xs text-md-on-surface-variant">暂无用户名记录。</p>

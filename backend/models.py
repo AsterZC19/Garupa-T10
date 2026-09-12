@@ -167,6 +167,6 @@ class PlayerNameHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     uid = db.Column(db.String, nullable=False)
     name = db.Column(db.String, nullable=False)
-    first_seen = db.Column(db.BigInteger, nullable=True)  # unknown for legacy records
+    first_seen = db.Column(db.BigInteger, nullable=True)  # milliseconds; legacy NULLs filled at startup
     last_observed = db.Column(db.BigInteger, nullable=False)  # internal ordering watermark
     __table_args__ = (db.Index('ix_player_name_history_uid_id', 'uid', 'id'),)

@@ -18,7 +18,8 @@ def initialize_in_process(database_uri, barrier, observation=None):
     with app.app_context():
         try:
             barrier.wait(timeout=15)
-            init_name_history()
+            with patch("services.player_name_history.now_ms", return_value=250):
+                init_name_history()
             if observation:
                 record_names([observation], 500)
         finally:
@@ -44,6 +45,19 @@ class NameHistoryTests(unittest.TestCase):
             engine.dispose()
         self.context.pop()
         self.directory.cleanup()
+
+    def test_missing_time_is_filled_once_on_upgrade(self):
+        with db.engine.begin() as connection:
+            connection.execute(PlayerNameHistory.__table__.insert().values(
+                uid='123', name='旧名', first_seen=None, last_observed=100))
+        with patch('services.player_name_history.now_ms', return_value=200):
+            init_name_history()
+        expected = [{'id': 1, 'name': '旧名', 'first_seen': 200}]
+        self.assertEqual(get_name_history(123), expected)
+        with patch('services.player_name_history.now_ms', return_value=300):
+            init_name_history()
+            record_names([{'uid': 123, 'name': '旧名'}])
+        self.assertEqual(get_name_history(123), expected)
 
     def test_concurrent_legacy_migration_and_same_name_writes(self):
         PlayerNameHistory.__table__.drop(db.engine)
@@ -73,8 +87,8 @@ class NameHistoryTests(unittest.TestCase):
                     process.join()
         expected = [
             {'id': 3, 'name': '新名', 'first_seen': 500},
-            {'id': 2, 'name': '当前名', 'first_seen': None},
-            {'id': 1, 'name': '旧名', 'first_seen': None},
+            {'id': 2, 'name': '当前名', 'first_seen': 250},
+            {'id': 1, 'name': '旧名', 'first_seen': 250},
         ]
         self.assertEqual(get_name_history(123), expected)
         init_name_history()
