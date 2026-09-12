@@ -52,4 +52,4 @@ npm install
 ## 致谢
 [GarupaSpeedTracker](https://github.com/StarFreedomX/GarupaSpeedTracker)
 
-感谢 Gemini-2.5-Pro, Gemini-3-Pro, GPT-5.5, DeepSeek V4 Flash 完成了 95% 的代码设计。
+感谢 Gemini-2.5-Pro, Gemini-3-Pro, GPT-5.6, DeepSeek V4 Flash 完成了 95% 的代码设计。

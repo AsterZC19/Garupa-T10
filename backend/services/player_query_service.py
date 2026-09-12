@@ -4,6 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from services.bestdori_client import client
 from services.ttl_cache import TTLCache
+from services.player_name_history import record_names, get_name_history
 
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -202,7 +203,7 @@ def init_player_db():
 def get_player(uid):
     cached = player_cache.get(uid)
     if cached is not None:
-        return cached
+        return {**cached, "name_history": get_name_history(uid)}
 
     now = time.time()
     try:
@@ -219,6 +220,8 @@ def get_player(uid):
         profile = api_data.get('profile', {})
         player_name = profile.get('user', {}).get('name') or profile.get('userName')
 
+        record_names([{'uid': uid, 'name': player_name}])
+
         t10_events = []
         cheer_data = (cheer_response or {}).get('data', [])
         for event in cheer_data:
@@ -233,6 +236,7 @@ def get_player(uid):
         player_data = {
             "uid": uid,
             "name": player_name,
+            "name_history": get_name_history(uid),
             "last_updated": int(now),
             "t10_events": t10_events,
             "profile": profile,

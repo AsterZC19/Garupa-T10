@@ -160,3 +160,10 @@ class MonthlyHeatmapCache(db.Model):
     counts = db.Column(db.Text, nullable=True)      # JSON: list[int]
     ref_ts = db.Column(db.Integer, nullable=True)   # ms, newest hour start (UTC)
     updated_at = db.Column(db.Integer, default=now_ms)
+
+
+class PlayerNameHistory(db.Model):
+    __tablename__ = 'player_name_history'
+    uid = db.Column(db.String, primary_key=True)
+    name = db.Column(db.String, primary_key=True)
+    last_seen = db.Column(db.BigInteger, nullable=False)  # milliseconds

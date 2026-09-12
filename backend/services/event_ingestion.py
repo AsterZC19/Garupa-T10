@@ -3,6 +3,7 @@ from collections import defaultdict
 from models import db, Event, Score, PlayerScoreHistory
 from services.bestdori_client import BESTDORI, client
 from services import event_repository as repo
+from services.player_name_history import record_names
 
 
 def parse_server_value(value, default=None):
@@ -105,6 +106,7 @@ def compute_speeds_and_store(event_id, top_json):
 
     points = top_json.get('points', [])
     users = top_json.get('users', [])
+    record_names(users)
     latest_by_uid = latest_points_by_uid(points)
 
     event = repo.get_event(event_id)
@@ -191,6 +193,7 @@ def backfill_event_history(event_id, server='jp', interval=60000):
     top = client.get_event_top_data(event_id, server=server, interval=interval)
     if top is None:
         return None
+    record_names(top.get('users', []))
     rows = build_history_rows(event_id, top)
     return repo.append_player_score_history_if_missing(event_id, rows)
 
@@ -202,6 +205,7 @@ def refresh_event_top_data(event_id, server='jp', interval=TOP_PLAYERS_INTERVAL_
 
     points = top.get('points', [])
     users = top.get('users', [])
+    record_names(users)
     if not points:
         return 0
 

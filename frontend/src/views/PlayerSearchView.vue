@@ -38,8 +38,23 @@
             <!-- 基本资料 -->
             <div class="text-center">
               <h2 class="text-3xl sm:text-4xl font-bold text-md-on-surface">
-                {{ playerData.profile.userName || '&nbsp;' }}
+                {{ playerData.name || playerData.profile.userName || '&nbsp;' }}
               </h2>
+              <details :key="playerData.uid" class="mt-2 text-sm text-md-on-surface-variant">
+                <summary class="cursor-pointer inline-flex items-center gap-1 rounded-full px-3 py-1 bg-md-surface-container-high text-md-primary focus-visible:outline">
+                  <span aria-hidden="true">◷</span> 曾用名
+                </summary>
+                <div class="mt-2 p-3 rounded-xl bg-md-surface-container-high text-left">
+                  <p class="text-xs mb-2">最后记录时间（本地时间），仅在查询或榜单拉取时记录。</p>
+                  <ul v-if="playerData.name_history?.length" class="space-y-2 max-h-60 overflow-y-auto">
+                    <li v-for="entry in playerData.name_history" :key="entry.name" class="flex flex-wrap justify-between gap-x-3 gap-y-1">
+                      <span class="break-all whitespace-pre-wrap">{{ entry.name }}</span>
+                      <time :datetime="new Date(entry.last_seen).toISOString()" class="text-xs shrink-0">{{ new Date(entry.last_seen).toLocaleString('zh-CN', { hour12: false }) }}</time>
+                    </li>
+                  </ul>
+                  <p v-else>暂无用户名记录。</p>
+                </div>
+              </details>
               <div class="flex items-center justify-center text-md-on-surface-variant mt-1 text-sm font-medium">
                 <span>UID: {{ playerData.profile.publishUserIdFlg ? playerData.profile.userId : 'ID未公开' }}</span>
                 <span class="mx-2 opacity-30">|</span>

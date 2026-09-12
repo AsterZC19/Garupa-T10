@@ -9,6 +9,7 @@ tracker 后端已持有官方 API 的设备签名，我们这边无需再连官�
 """
 from services import tracker_client, monthly_repository as repo
 from services.timeutil import now_ms
+from services.player_name_history import record_names
 from services.tracker_client import TrackerError
 
 BESTDORI = "https://bestdori.com"
@@ -117,6 +118,7 @@ def refresh_monthly_top(monthly_id):
 
     points = snapshot.get('points') or []
     users = snapshot.get('users') or []
+    record_names(users)
     if not points:
         return 0
 
@@ -158,6 +160,7 @@ def backfill_monthly_history(monthly_id):
 
     points = snapshot.get('points') or []
     users = snapshot.get('users') or []
+    record_names(users)
     if not points:
         return 0
 
