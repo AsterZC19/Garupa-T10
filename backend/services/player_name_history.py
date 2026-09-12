@@ -1,8 +1,16 @@
 """Passive name observations only; never fetch player profiles here."""
 from sqlalchemy import func, select
 from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.schema import CreateTable
 from models import db, PlayerNameHistory
 from services.timeutil import now_ms
+
+
+def init_name_history():
+    # Web and scheduler import app concurrently. A separate existence check
+    # (checkfirst=True) races; let SQLite handle this in the CREATE statement.
+    with db.engine.begin() as connection:
+        connection.execute(CreateTable(PlayerNameHistory.__table__, if_not_exists=True))
 
 
 def record_names(users, observed_at=None):

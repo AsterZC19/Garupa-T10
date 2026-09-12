@@ -1,13 +1,26 @@
 """Offline regression tests: python -m unittest discover -s backend -p test_player_name_history.py."""
+import multiprocessing
 import tempfile
 import unittest
 from unittest.mock import patch
 from flask import Flask
-from models import db
+from models import db, PlayerNameHistory
 from routes.player import player_bp
-from services.player_name_history import record_names, get_name_history
+from services.player_name_history import record_names, get_name_history, init_name_history
 from services import player_query_service as query
 from services import event_ingestion, monthly_ingestion
+
+
+def initialize_in_process(database_uri, barrier):
+    app = Flask(__name__)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_uri
+    db.init_app(app)
+    with app.app_context():
+        try:
+            barrier.wait(timeout=15)
+            init_name_history()
+        finally:
+            db.engine.dispose()
 
 
 class NameHistoryTests(unittest.TestCase):
@@ -29,6 +42,32 @@ class NameHistoryTests(unittest.TestCase):
             engine.dispose()
         self.context.pop()
         self.directory.cleanup()
+
+    def test_concurrent_startup_and_restart_preserve_history(self):
+        PlayerNameHistory.__table__.drop(db.engine)
+        context = multiprocessing.get_context('spawn')  # Windows process semantics
+        for existing_table in (False, True):
+            barrier = context.Barrier(2)
+            processes = [
+                context.Process(target=initialize_in_process, args=(
+                    self.app.config['SQLALCHEMY_DATABASE_URI'], barrier))
+                for _ in range(2)
+            ]
+            try:
+                for process in processes:
+                    process.start()
+                for process in processes:
+                    process.join(timeout=30)
+                    self.assertEqual(process.exitcode, 0)
+            finally:
+                for process in processes:
+                    if process.is_alive():
+                        process.terminate()
+                        process.join()
+            if not existing_table:
+                record_names([{'uid': 123, 'name': '保留名字'}], 100)
+            self.assertEqual(get_name_history(123), [
+                {'name': '保留名字', 'last_seen': 100}])
 
     def test_unique_names_latest_observation_and_persistence(self):
         for name, timestamp in [('旧名', 100), ('新名', 200), ('旧名', 300), ('旧名', 50)]:

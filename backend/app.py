@@ -36,8 +36,10 @@ db.init_app(app)
 # import models so SQLAlchemy sees them
 import models  # noqa
 
+from services.player_name_history import init_name_history
+
 with app.app_context():
-    models.PlayerNameHistory.__table__.create(db.engine, checkfirst=True)
+    init_name_history()
 
 # register routes
 from routes.events import events_bp
