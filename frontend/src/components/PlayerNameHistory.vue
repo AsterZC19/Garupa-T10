@@ -22,7 +22,7 @@
     role="dialog"
     :aria-labelledby="popupId + '-title'"
     :style="position"
-    class="fixed m-0 box-border rounded-2xl border border-md-outline-variant bg-md-surface-container-high p-3 text-left text-md-on-surface shadow-xl"
+    class="fixed m-0 box-border rounded-2xl border border-md-outline-variant bg-md-surface-container-high p-4 sm:p-5 text-left text-md-on-surface shadow-xl"
     @toggle="isOpen = $event.newState === 'open'"
   >
     <div class="flex items-center justify-between gap-3 mb-2">
@@ -32,7 +32,7 @@
       </button>
     </div>
     <p class="mb-2 text-[10px] leading-4 text-md-on-surface-variant">最后记录时间 · 本地时间</p>
-    <ul v-if="entries?.length" class="max-h-48 overflow-y-auto overscroll-contain divide-y divide-md-outline-variant">
+    <ul v-if="entries?.length" class="max-h-[min(20rem,calc(100dvh-10rem))] overflow-y-auto overscroll-contain divide-y divide-md-outline-variant">
       <li v-for="entry in entries" :key="entry.name" class="py-2 first:pt-0 last:pb-0">
         <p class="whitespace-pre-wrap break-all text-xs leading-4">{{ entry.name }}</p>
         <time :datetime="new Date(entry.last_seen).toISOString()" class="mt-0.5 block text-[10px] leading-4 tabular-nums text-md-on-surface-variant">{{ new Date(entry.last_seen).toLocaleString('zh-CN', { hour12: false }) }}</time>
@@ -43,7 +43,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue';
 
 const props = defineProps(['uid', 'entries']);
 const popupId = computed(() => 'player-name-history-' + props.uid);
@@ -56,29 +56,45 @@ function close() {
   popup.value?.hidePopover();
 }
 
-function toggle() {
+async function updatePosition() {
+  const anchor = trigger.value.getBoundingClientRect();
+  const width = Math.min(360, window.innerWidth - 32);
+  position.value = {
+    width: width + 'px',
+    left: Math.max(16, Math.min(anchor.right - width, window.innerWidth - width - 16)) + 'px',
+    top: '16px',
+    maxHeight: 'calc(100dvh - 32px)',
+    overflowY: 'auto',
+  };
+  await nextTick();
+  const height = popup.value?.getBoundingClientRect().height || 0;
+  const below = anchor.bottom + 8;
+  const above = anchor.top - height - 8;
+  position.value.top = Math.max(16, Math.min(
+    below + height <= window.innerHeight - 16 ? below : above,
+    window.innerHeight - height - 16,
+  )) + 'px';
+}
+
+async function toggle() {
   if (popup.value.matches(':popover-open')) {
     close();
     return;
   }
-  const anchor = trigger.value.getBoundingClientRect();
-  const width = Math.min(280, window.innerWidth - 32);
-  position.value = {
-    width: width + 'px',
-    left: Math.max(16, Math.min(anchor.right - width, window.innerWidth - width - 16)) + 'px',
-    top: Math.max(16, Math.min(anchor.bottom + 8, window.innerHeight - 296)) + 'px',
-    maxHeight: 'calc(100dvh - 32px)',
-    overflowY: 'auto',
-  };
   popup.value.showPopover();
+  await updatePosition();
+}
+
+function handleResize() {
+  if (popup.value?.matches(':popover-open')) updatePosition();
 }
 
 onMounted(() => {
-  window.addEventListener('resize', close);
+  window.addEventListener('resize', handleResize);
   window.addEventListener('scroll', close);
 });
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', close);
+  window.removeEventListener('resize', handleResize);
   window.removeEventListener('scroll', close);
 });
 </script>
