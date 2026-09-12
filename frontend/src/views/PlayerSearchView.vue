@@ -37,11 +37,11 @@
 
             <!-- 基本资料 -->
             <div class="text-center">
-              <div class="flex items-center justify-center gap-1.5">
+              <div ref="usernameAnchor" class="flex items-center justify-center gap-1.5">
                 <h2 class="min-w-0 break-all text-3xl sm:text-4xl font-bold text-md-on-surface">
                   {{ playerData.name || playerData.profile.userName || '&nbsp;' }}
                 </h2>
-                <PlayerNameHistory :key="playerData.uid" :uid="playerData.uid" :entries="playerData.name_history" />
+                <PlayerNameHistory :key="playerData.uid" :uid="playerData.uid" :entries="playerData.name_history" :anchor="usernameAnchor" />
               </div>
               <div class="flex items-center justify-center text-md-on-surface-variant mt-1 text-sm font-medium">
                 <span>UID: {{ playerData.profile.publishUserIdFlg ? playerData.profile.userId : 'ID未公开' }}</span>
@@ -326,6 +326,7 @@ import DegreeDisplay from '../components/DegreeDisplay.vue';
 import CardIcon from '../components/CardIcon.vue';
 
 const allDegreesData = ref(null);
+const usernameAnchor = ref(null);
 
 const DEGREES_CACHE_KEY = 't10_degrees_cache'
 const DEGREES_CACHE_TTL = 24 * 3600 * 1000 // 24 hours

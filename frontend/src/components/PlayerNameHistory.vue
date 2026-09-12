@@ -45,7 +45,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue';
 
-const props = defineProps(['uid', 'entries']);
+const props = defineProps(['uid', 'entries', 'anchor']);
 const popupId = computed(() => 'player-name-history-' + props.uid);
 const trigger = ref(null);
 const popup = ref(null);
@@ -57,11 +57,11 @@ function close() {
 }
 
 async function updatePosition() {
-  const anchor = trigger.value.getBoundingClientRect();
+  const anchor = (props.anchor || trigger.value).getBoundingClientRect();
   const width = Math.min(360, window.innerWidth - 32);
   position.value = {
     width: width + 'px',
-    left: Math.max(16, Math.min(anchor.right - width, window.innerWidth - width - 16)) + 'px',
+    left: Math.max(16, Math.min(anchor.left + (anchor.width - width) / 2, window.innerWidth - width - 16)) + 'px',
     top: '16px',
     maxHeight: 'calc(100dvh - 32px)',
     overflowY: 'auto',
