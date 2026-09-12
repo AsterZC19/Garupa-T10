@@ -11,7 +11,7 @@ from services import player_query_service as query
 from services import event_ingestion, monthly_ingestion
 
 
-def initialize_in_process(database_uri, barrier):
+def initialize_in_process(database_uri, barrier, observation=None):
     app = Flask(__name__)
     app.config['SQLALCHEMY_DATABASE_URI'] = database_uri
     db.init_app(app)
@@ -19,6 +19,8 @@ def initialize_in_process(database_uri, barrier):
         try:
             barrier.wait(timeout=15)
             init_name_history()
+            if observation:
+                record_names([observation], 500)
         finally:
             db.engine.dispose()
 
@@ -42,6 +44,45 @@ class NameHistoryTests(unittest.TestCase):
             engine.dispose()
         self.context.pop()
         self.directory.cleanup()
+
+    def test_concurrent_legacy_migration_and_same_name_writes(self):
+        PlayerNameHistory.__table__.drop(db.engine)
+        with db.engine.begin() as connection:
+            connection.exec_driver_sql("""
+                CREATE TABLE player_name_history (
+                    uid VARCHAR NOT NULL, name VARCHAR NOT NULL,
+                    last_seen BIGINT NOT NULL, PRIMARY KEY (uid, name))
+            """)
+            connection.exec_driver_sql(
+                "INSERT INTO player_name_history VALUES ('123', '旧名', 100), ('123', '当前名', 200)")
+        context = multiprocessing.get_context('spawn')
+        barrier = context.Barrier(2)
+        processes = [context.Process(target=initialize_in_process, args=(
+            self.app.config['SQLALCHEMY_DATABASE_URI'], barrier,
+            {'uid': 123, 'name': '新名'})) for _ in range(2)]
+        try:
+            for process in processes:
+                process.start()
+            for process in processes:
+                process.join(timeout=30)
+                self.assertEqual(process.exitcode, 0)
+        finally:
+            for process in processes:
+                if process.is_alive():
+                    process.terminate()
+                    process.join()
+        expected = [
+            {'id': 3, 'name': '新名', 'first_seen': 500},
+            {'id': 2, 'name': '当前名', 'first_seen': None},
+            {'id': 1, 'name': '旧名', 'first_seen': None},
+        ]
+        self.assertEqual(get_name_history(123), expected)
+        init_name_history()
+        record_names([{'uid': 123, 'name': '新名'}], 600)
+        self.assertEqual(get_name_history(123), expected)
+        record_names([{'uid': 123, 'name': '旧名'}], 700)
+        self.assertEqual(get_name_history(123)[0],
+                         {'id': 4, 'name': '旧名', 'first_seen': 700})
 
     def test_concurrent_startup_and_restart_preserve_history(self):
         PlayerNameHistory.__table__.drop(db.engine)
@@ -67,17 +108,19 @@ class NameHistoryTests(unittest.TestCase):
             if not existing_table:
                 record_names([{'uid': 123, 'name': '保留名字'}], 100)
             self.assertEqual(get_name_history(123), [
-                {'name': '保留名字', 'last_seen': 100}])
+                {'id': 1, 'name': '保留名字', 'first_seen': 100}])
 
-    def test_unique_names_latest_observation_and_persistence(self):
-        for name, timestamp in [('旧名', 100), ('新名', 200), ('旧名', 300), ('旧名', 50)]:
+    def test_name_changes_reuse_and_unchanged_first_seen(self):
+        for name, timestamp in [('旧名', 100), ('新名', 200), ('旧名', 300), ('旧名', 400), ('新名', 350)]:
             record_names([{'uid': '00123', 'name': name}], timestamp)
         record_names([{'uid': 123, 'name': '  '}, {'uid': None, 'name': 'bad'}], 400)
         record_names([{'uid': 456, 'name': '旧名'}], 500)
         db.session.remove()
         db.engine.dispose()
         self.assertEqual(get_name_history(123), [
-            {'name': '旧名', 'last_seen': 300}, {'name': '新名', 'last_seen': 200}])
+            {'id': 3, 'name': '旧名', 'first_seen': 300},
+            {'id': 2, 'name': '新名', 'first_seen': 200},
+            {'id': 1, 'name': '旧名', 'first_seen': 100}])
 
     def test_query_records_and_cache_only_reads_history(self):
         with patch.object(query.client, 'get_player_profile', return_value={'data': {'profile': {'userName': '名字'}}}) as profile, \
@@ -85,7 +128,7 @@ class NameHistoryTests(unittest.TestCase):
              patch.object(query, 'extract_area_item_levels', return_value=[]):
             first = self.app.test_client().get('/api/player/123').get_json()
             self.assertEqual(first['name_history'][0]['name'], '名字')
-            record_names([{'uid': 123, 'name': '榜单新名'}], first['name_history'][0]['last_seen'] + 1)
+            record_names([{'uid': 123, 'name': '榜单新名'}], first['name_history'][0]['first_seen'])
             second = self.app.test_client().get('/api/player/123').get_json()
             self.assertEqual(profile.call_count, 1)
             self.assertEqual(second['name_history'][1], first['name_history'][0])
