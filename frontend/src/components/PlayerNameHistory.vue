@@ -31,7 +31,6 @@
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-3.5 w-3.5"><path d="m6 6 12 12M18 6 6 18" stroke-linecap="round" /></svg>
       </button>
     </div>
-    <p class="mb-2 text-[10px] leading-4 text-md-on-surface-variant">最后记录时间 · 本地时间</p>
     <ul v-if="entries?.length" class="max-h-[min(20rem,calc(100dvh-10rem))] overflow-y-auto overscroll-contain divide-y divide-md-outline-variant">
       <li v-for="entry in entries" :key="entry.name" class="py-2 first:pt-0 last:pb-0">
         <p class="whitespace-pre-wrap break-all text-xs leading-4">{{ entry.name }}</p>
