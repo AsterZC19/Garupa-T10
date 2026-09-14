@@ -3,7 +3,7 @@
 
 复用 StarFreedomX/GarupaSpeedTracker 已部署的后端 API（该后端已持有官方 API
 的设备签名，我们这边无需再连官方接口 / 配置签名）。地址通过环境变量
-GARUPA_TRACKER_BASE 配置。
+MONTHLY_INFO_BASE_URL / MONTHLY_TOP_BASE_URL 分别配置域名，未设置时使用 GARUPA_TRACKER_BASE。
 
 数据源接口：
 - GET {base}/monthlyRanking/info.json          → 全部月榜期 {id: {name, assetBundleName, startAt[], endAt[]}}
@@ -13,15 +13,8 @@ import os
 import requests
 
 from services.ttl_cache import TTLCache
+from services.data_source_config import GARUPA_TRACKER_BASE, MONTHLY_INFO_API_URL, MONTHLY_TOP_API_URL
 
-# 加载 backend/.env（若存在）中的 GARUPA_TRACKER_* 配置
-try:
-    from dotenv import load_dotenv
-    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
-except Exception:
-    pass
-
-GARUPA_TRACKER_BASE = os.environ.get('GARUPA_TRACKER_BASE', 'http://127.0.0.1:5519/api').rstrip('/')
 # 服务器索引：0=jp
 TRACKER_SERVER = int(os.environ.get('GARUPA_TRACKER_SERVER', '0'))
 TRACKER_TIMEOUT = int(os.environ.get('GARUPA_TRACKER_TIMEOUT', '30'))
@@ -35,8 +28,8 @@ class TrackerError(Exception):
     pass
 
 
-def _get_json(path, params=None, timeout=TRACKER_TIMEOUT):
-    url = f'{GARUPA_TRACKER_BASE}/{path.lstrip("/")}'
+def _get_json(path, params=None, timeout=TRACKER_TIMEOUT, *, url=None):
+    url = url or f'{GARUPA_TRACKER_BASE}/{path.lstrip("/")}'
     try:
         resp = requests.get(url, params=params, timeout=timeout)
     except requests.exceptions.RequestException as e:
@@ -55,7 +48,7 @@ def get_monthly_info(force=False):
         cached = _info_cache.get('info')
         if cached is not None:
             return cached
-    data = _get_json('monthlyRanking/info.json')
+    data = _get_json('monthlyRanking/info.json', url=MONTHLY_INFO_API_URL)
     return _info_cache.set('info', data or {})
 
 
@@ -69,7 +62,7 @@ def get_monthly_top(monthly_id, force=False):
     data = _get_json('monthlyRanking/top', {
         'server': TRACKER_SERVER,
         'monthlyId': int(monthly_id),
-    })
+    }, url=MONTHLY_TOP_API_URL)
     if data is None:
         data = {'points': [], 'users': []}
     return _top_cache.set(cache_key, data)

@@ -53,6 +53,13 @@ def build_name_map(users):
     return {str(user.get('uid')): user.get('name', '') for user in users}
 
 
+def fill_missing_ranks(score_rows):
+    # 部分数据源的 rank 是玩家等级；活动排名缺失时按当前 PT 推导。
+    for rank, row in enumerate(sorted(score_rows, key=lambda row: row['pt'], reverse=True), 1):
+        if not row['rank']:
+            row['rank'] = rank
+
+
 def keep_latest_point_per_minute(points):
     bucketed = {}
     for point in points:
@@ -147,6 +154,7 @@ def compute_speeds_and_store(event_id, top_json):
                 'updated_at': latest_data_timestamp
             })
 
+    fill_missing_ranks(score_rows)
     repo.replace_scores(event_id, score_rows)
 
 
@@ -249,6 +257,7 @@ def refresh_event_top_data(event_id, server='jp', interval=TOP_PLAYERS_INTERVAL_
                 'updated_at': latest_data_timestamp
             })
 
+    fill_missing_ranks(score_rows)
     repo.replace_scores(event_id, score_rows)
 
     # --- History rows (from bucketed points + name map) ---

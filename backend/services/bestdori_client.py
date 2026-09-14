@@ -1,4 +1,5 @@
 import requests
+from services.data_source_config import EVENT_TOP_API_URL
 
 
 BESTDORI = "https://bestdori.com"
@@ -9,9 +10,9 @@ class BestdoriClient:
     def __init__(self):
         self.session = requests.Session()
 
-    def get_json(self, path, timeout=10):
+    def get_json(self, path, timeout=10, *, url=None, params=None):
         try:
-            response = self.session.get(f"{BESTDORI_API_URL}{path}", timeout=timeout)
+            response = self.session.get(url or f"{BESTDORI_API_URL}{path}", timeout=timeout, params=params)
             if response.status_code != 200:
                 return None
             return response.json()
@@ -33,7 +34,11 @@ class BestdoriClient:
         return self.get_json(f"/events/{event_id}.json", timeout=10)
 
     def get_event_top_data(self, event_id, server='jp', interval=60000):
-        return self.get_json(f"/eventtop/data?server={server}&event={event_id}&mid=0&interval={interval}", timeout=60 if interval == 60000 else 15)
+        return self.get_json(
+            '/eventtop/data', url=EVENT_TOP_API_URL,
+            params={'server': server, 'event': event_id, 'mid': 0, 'interval': interval},
+            timeout=60 if interval == 60000 else 15,
+        )
 
     def get_player_profile(self, uid, server='jp'):
         return self.get_json(f"/player/{server}/{uid}?mode=2", timeout=15)
