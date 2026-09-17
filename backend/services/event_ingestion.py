@@ -107,13 +107,13 @@ def _process_points_single_pass(points):
     return bucketed_list, latest_by_uid
 
 
-def compute_speeds_and_store(event_id, top_json):
+def compute_speeds_and_store(event_id, top_json, server='jp'):
     if top_json is None:
         return
 
     points = top_json.get('points', [])
     users = top_json.get('users', [])
-    record_names(users)
+    record_names(users, source=f'event:{server}:{event_id}')
     latest_by_uid = latest_points_by_uid(points)
 
     event = repo.get_event(event_id)
@@ -176,7 +176,7 @@ def parse_and_store_event_data(event_id, server='jp'):
         print("no top data")
         return True
 
-    compute_speeds_and_store(event_id, top)
+    compute_speeds_and_store(event_id, top, server=server)
     return True
 
 
@@ -201,7 +201,7 @@ def backfill_event_history(event_id, server='jp', interval=60000):
     top = client.get_event_top_data(event_id, server=server, interval=interval)
     if top is None:
         return None
-    record_names(top.get('users', []))
+    record_names(top.get('users', []), source=f'event:{server}:{event_id}')
     rows = build_history_rows(event_id, top)
     return repo.append_player_score_history_if_missing(event_id, rows)
 
@@ -213,7 +213,7 @@ def refresh_event_top_data(event_id, server='jp', interval=TOP_PLAYERS_INTERVAL_
 
     points = top.get('points', [])
     users = top.get('users', [])
-    record_names(users)
+    record_names(users, source=f'event:{server}:{event_id}')
     if not points:
         return 0
 

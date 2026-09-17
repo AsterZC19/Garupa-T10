@@ -170,3 +170,12 @@ class PlayerNameHistory(db.Model):
     first_seen = db.Column(db.BigInteger, nullable=True)  # milliseconds; legacy NULLs filled at startup
     last_observed = db.Column(db.BigInteger, nullable=False)  # internal ordering watermark
     __table_args__ = (db.Index('ix_player_name_history_uid_id', 'uid', 'id'),)
+
+
+class PlayerNameObservation(db.Model):
+    """Last name seen per upstream feed; survives scheduler/web restarts."""
+    __tablename__ = 'player_name_observation'
+    uid = db.Column(db.String, primary_key=True)
+    source = db.Column(db.String, primary_key=True)
+    name = db.Column(db.String, nullable=False)
+    observed_at = db.Column(db.BigInteger, nullable=False)

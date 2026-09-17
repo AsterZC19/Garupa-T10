@@ -118,7 +118,7 @@ def refresh_monthly_top(monthly_id):
 
     points = snapshot.get('points') or []
     users = snapshot.get('users') or []
-    record_names(users)
+    record_names(users, source=f'monthly:{tracker_client.TRACKER_SERVER}:{monthly_id}')
     if not points:
         return 0
 
@@ -160,7 +160,7 @@ def backfill_monthly_history(monthly_id):
 
     points = snapshot.get('points') or []
     users = snapshot.get('users') or []
-    record_names(users)
+    record_names(users, source=f'monthly:{tracker_client.TRACKER_SERVER}:{monthly_id}')
     if not points:
         return 0
 

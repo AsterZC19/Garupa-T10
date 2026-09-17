@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from flask import Flask
-from models import db, PlayerNameHistory
+from models import db, PlayerNameHistory, PlayerNameObservation
 from routes.player import player_bp
 from services.player_name_history import record_names, get_name_history, init_name_history
 from services import player_query_service as query
@@ -61,6 +61,7 @@ class NameHistoryTests(unittest.TestCase):
 
     def test_concurrent_legacy_migration_and_same_name_writes(self):
         PlayerNameHistory.__table__.drop(db.engine)
+        PlayerNameObservation.__table__.drop(db.engine)
         with db.engine.begin() as connection:
             connection.exec_driver_sql("""
                 CREATE TABLE player_name_history (
@@ -100,6 +101,7 @@ class NameHistoryTests(unittest.TestCase):
 
     def test_concurrent_startup_and_restart_preserve_history(self):
         PlayerNameHistory.__table__.drop(db.engine)
+        PlayerNameObservation.__table__.drop(db.engine)
         context = multiprocessing.get_context('spawn')  # Windows process semantics
         for existing_table in (False, True):
             barrier = context.Barrier(2)
@@ -157,6 +159,56 @@ class NameHistoryTests(unittest.TestCase):
              patch.object(query.client, 'get_player_cheer', return_value=None):
             self.assertEqual(self.app.test_client().get('/api/player/123').status_code, 404)
             self.assertEqual(get_name_history(123), [])
+
+    def test_minute_polling_does_not_replay_stale_names_after_two_changes(self):
+        event_top = {'users': [{'uid': '123', 'name': '旧名'}], 'points': []}
+        monthly_top = {'users': [{'uid': '123', 'name': '旧名'}], 'points': []}
+        with patch.object(event_ingestion.client, 'get_event_top_data', return_value=event_top), \
+             patch.object(monthly_ingestion.tracker_client, 'get_monthly_top', return_value=monthly_top):
+            event_ingestion.refresh_event_top_data('1')
+            monthly_ingestion.refresh_monthly_top(1)
+            for name in ['中间名', '新名']:
+                event_top['users'][0]['name'] = name
+                event_ingestion.refresh_event_top_data('1')
+                monthly_ingestion.refresh_monthly_top(1)
+            expected = get_name_history(123)
+            self.assertEqual([r['name'] for r in expected], ['新名', '中间名', '旧名'])
+
+            # Persist source state: reconnect/startup must not restart the loop.
+            db.session.remove()
+            db.engine.dispose()
+            init_name_history()
+            for _ in range(5):
+                monthly_ingestion.refresh_monthly_top(1)
+                event_ingestion.refresh_event_top_data('1')
+            self.assertEqual(get_name_history(123), expected)
+
+            # Catch-up to the current name does not create a duplicate either.
+            monthly_top['users'][0]['name'] = '新名'
+            monthly_ingestion.refresh_monthly_top(1)
+            self.assertEqual(get_name_history(123), expected)
+            # A real return to an old name still creates a new occurrence.
+            event_top['users'][0]['name'] = '旧名'
+            event_ingestion.refresh_event_top_data('1')
+            monthly_ingestion.refresh_monthly_top(1)
+            self.assertEqual([r['name'] for r in get_name_history(123)],
+                             ['旧名', '新名', '中间名', '旧名'])
+
+    def test_sources_are_independent_and_stale_observations_are_ignored(self):
+        for source, name, timestamp in [
+            ('event:jp:1', '旧名', 100),
+            ('event:jp:2', '新名', 200),
+            ('profile:jp', '新名', 300),
+            ('event:jp:1', '旧名', 400),
+            ('event:jp:2', '新名', 500),
+            ('profile:jp', '又改名', 600),
+            ('event:jp:2', '新名', 700),
+            ('profile:jp', '旧名', 550),
+            ('profile:jp', '又改名', 800),
+        ]:
+            record_names([{'uid': 123, 'name': name}], timestamp, source=source)
+        self.assertEqual([r['name'] for r in get_name_history(123)],
+                         ['又改名', '新名', '旧名'])
 
     def test_event_ingestion_paths_record_without_new_points(self):
         top = {'users': [{'uid': '123', 'name': '活动名'}], 'points': []}
