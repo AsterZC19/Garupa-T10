@@ -10,6 +10,7 @@ tracker 后端已持有官方 API 的设备签名，我们这边无需再连官�
 from services import tracker_client, monthly_repository as repo
 from services.timeutil import now_ms
 from services.player_name_history import record_names
+from services.ranking_snapshot import latest_snapshot_by_uid
 from services.tracker_client import TrackerError
 
 BESTDORI = "https://bestdori.com"
@@ -65,7 +66,7 @@ def _latest_scores_from_snapshot(monthly_id, points, users):
     """从 top 快照推导当前 top 分数。
 
     points: [{time, uid, value}]；users: [{uid, name, introduction, rank, ...}]
-    取每位玩家最新一点的 value 作为当前 PT。
+    只取全局最新快照中的玩家及 PT；users 和旧 points 含历史参榜玩家。
     """
     user_map = {}
     for u in users:
@@ -73,17 +74,12 @@ def _latest_scores_from_snapshot(monthly_id, points, users):
         if uid:
             user_map[uid] = u
 
-    latest_by_uid = {}
-    for p in points:
-        uid = str(p.get('uid'))
-        ts = int(p.get('time') or p.get('timestamp') or 0)
-        val = int(p.get('value') or 0)
-        if uid not in latest_by_uid or ts > latest_by_uid[uid][0]:
-            latest_by_uid[uid] = (ts, val)
+    latest_by_uid = latest_snapshot_by_uid(points)
 
     now_ts = now_ms()
     rows = []
-    for uid, (ts, pt) in latest_by_uid.items():
+    for uid, point in latest_by_uid.items():
+        ts, pt = point['timestamp'], point['pt']
         u = user_map.get(uid, {})
         rows.append({
             'monthly_id': monthly_id,
