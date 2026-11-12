@@ -7,13 +7,13 @@
 
       <!-- 搜索框 -->
       <div class="max-w-sm mx-auto mb-8">
-        <h1 class="text-center text-3xl font-bold mb-6 text-md-on-surface">玩家查询</h1>
+        <h1 class="text-center text-3xl font-bold mb-6 text-md-on-surface">{{ t('player.title') }}</h1>
         <PlayerSearch v-model="inputUid" @search="handleSearch" />
       </div>
 
       <!-- 加载状态 -->
       <div v-if="isLoading" class="text-center py-12">
-        <p class="text-lg text-md-on-surface-variant">加载中...</p>
+        <p class="text-lg text-md-on-surface-variant">{{ t('common.loading') }}</p>
       </div>
 
       <!-- 查到玩家 -->
@@ -44,9 +44,9 @@
                 <PlayerNameHistory :key="playerData.uid" :uid="playerData.uid" :entries="playerData.name_history" :anchor="usernameAnchor" />
               </div>
               <div class="flex items-center justify-center text-md-on-surface-variant mt-1 text-sm font-medium">
-                <span>UID: {{ playerData.profile.publishUserIdFlg ? playerData.profile.userId : 'ID未公开' }}</span>
+                <span>UID: {{ playerData.profile.publishUserIdFlg ? playerData.profile.userId : t('player.privateId') }}</span>
                 <span class="mx-2 opacity-30">|</span>
-                <span>等级 {{ playerData.profile.rank }}</span>
+                <span>{{ t('player.rank', { rank: playerData.profile.rank }) }}</span>
               </div>
             </div>
 
@@ -79,7 +79,7 @@
 
             <!-- T10 记录 -->
             <div class="pt-2 border-b md-divider pb-6">
-              <h3 class="text-lg font-bold text-md-on-surface mb-4 text-center">T10 记录</h3>
+              <h3 class="text-lg font-bold text-md-on-surface mb-4 text-center">{{ t('player.t10Records') }}</h3>
 
               <div
                 v-if="earnedDegrees && earnedDegrees.length > 0"
@@ -93,10 +93,10 @@
                   <!-- 活动信息 -->
                   <router-link :to="'/' + degree.event_id" class="text-center mb-1">
                     <p class="font-bold text-md-primary text-[10px]">
-                      活动 #{{ degree.event_id }}
+                      {{ t('player.eventNum', { id: degree.event_id }) }}
                     </p>
                     <p class="text-[11px] text-md-on-surface-variant font-medium">
-                      <span class="text-md-primary font-black">{{ degree.rank }}</span> 位
+                      {{ t('player.rankPlace', { rank: degree.rank }) }}
                     </p>
                   </router-link>
 
@@ -113,13 +113,13 @@
 
               <!-- 无记录 -->
               <div v-else class="text-center py-8">
-                <p class="text-md-on-surface-variant text-sm">该玩家暂无 T10 记录。</p>
+                <p class="text-md-on-surface-variant text-sm">{{ t('player.noT10Records') }}</p>
               </div>
             </div>
 
             <!-- 主乐队 (Responsive Scaling) -->
             <div v-if="sortedCards" class="pb-2 overflow-hidden w-full">
-              <h3 class="text-lg font-bold text-md-on-surface mb-4 text-center">主乐队</h3>
+              <h3 class="text-lg font-bold text-md-on-surface mb-4 text-center">{{ t('player.mainBand') }}</h3>
               <div class="flex flex-nowrap justify-center items-start
                           gap-0.5 sm:gap-1 md:gap-2
                           scale-[0.7] xs:scale-[0.8] sm:scale-[0.9] md:scale-100
@@ -152,7 +152,7 @@
             <div v-if="playerData.bp" class="mt-2 pb-2 overflow-hidden w-full">
 
               <h3 class="text-base font-bold text-md-on-surface mb-2 text-center">
-                综合力
+                {{ t('player.bandPower') }}
               </h3>
 
               <!-- 内容区（和主乐队同结构，但稍微窄一点） -->
@@ -232,7 +232,7 @@
 
             <!-- 乐队等级 -->
             <div v-if="playerData.profile.bandRankMap && playerData.profile.bandRankMap.entries" class="pb-6 border-b md-divider">
-              <h3 class="text-lg font-bold text-md-on-surface mb-4 text-center">乐队等级</h3>
+              <h3 class="text-lg font-bold text-md-on-surface mb-4 text-center">{{ t('player.bandRank') }}</h3>
               <div class="flex flex-wrap justify-center gap-x-5 gap-y-3">
                 <div
                   v-for="(rank, bandId) in playerData.profile.bandRankMap.entries"
@@ -253,7 +253,7 @@
             <div
               v-if="playerData.profile.userCharacterRankMap && playerData.profile.userCharacterRankMap.entries"
             >
-              <h3 class="text-lg font-bold text-md-on-surface mb-4 text-center">角色等级</h3>
+              <h3 class="text-lg font-bold text-md-on-surface mb-4 text-center">{{ t('player.charRank') }}</h3>
               <div class="grid grid-cols-5 sm:grid-cols-7 md:grid-cols-10 gap-2 text-center">
                 <div
                   v-for="(char, charId) in playerData.profile.userCharacterRankMap.entries"
@@ -274,14 +274,14 @@
 
             <!-- 基建等级 -->
             <div v-if="playerData.area_items && playerData.area_items.length" class="pb-2">
-              <h3 class="text-lg font-bold text-md-on-surface mb-4 text-center">基建等级</h3>
+              <h3 class="text-lg font-bold text-md-on-surface mb-4 text-center">{{ t('player.areaItems') }}</h3>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div
                   v-for="item in playerData.area_items"
                   :key="item.id"
                   class="flex items-center justify-between gap-3 px-3 py-2 bg-md-surface-container-high rounded-xl"
                 >
-                  <span class="text-sm font-medium text-md-on-surface truncate">{{ item.name }}</span>
+                  <span class="text-sm font-medium text-md-on-surface truncate">{{ item.names?.[locale] || item.name }}</span>
                   <span class="text-sm font-black text-md-primary tabular-nums flex-shrink-0">Lv.{{ item.level }}</span>
                 </div>
               </div>
@@ -293,19 +293,19 @@
 
       <!-- 未找到玩家 -->
       <div v-else-if="searchedUid && !isLoading" class="text-center py-12">
-        <p class="text-2xl font-bold text-md-error">未能找到玩家</p>
+        <p class="text-2xl font-bold text-md-error">{{ t('player.notFound') }}</p>
         <p class="text-md-on-surface-variant mt-2">UID: {{ searchedUid }}</p>
       </div>
 
       <!-- 初始提示 -->
       <div v-else class="text-center py-12">
-        <p class="text-md-on-surface-variant">请输入玩家 UID 以查询玩家信息和 T10 记录。</p>
+        <p class="text-md-on-surface-variant">{{ t('player.emptyPrompt') }}</p>
       </div>
     </main>
 
     <!-- 页脚 -->
     <footer class="mt-10 text-center text-xs text-md-on-surface-variant py-4 border-t md-divider">
-      由 <span>🎵</span>构建 /
+      {{ t('common.builtByPrefix') }}<span>Garupa T10</span>{{ t('common.builtBySuffix') }}
       <a
         href="https://github.com/AsterZC19/Garupa-T10"
         target="_blank"
@@ -324,6 +324,9 @@ import PlayerSearch from '../components/PlayerSearch.vue';
 import PlayerNameHistory from '../components/PlayerNameHistory.vue';
 import DegreeDisplay from '../components/DegreeDisplay.vue';
 import CardIcon from '../components/CardIcon.vue';
+import { useI18n } from '../i18n.js';
+
+const { t, locale } = useI18n();
 
 const allDegreesData = ref(null);
 const usernameAnchor = ref(null);

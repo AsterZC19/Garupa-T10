@@ -17,16 +17,21 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useI18n } from '../i18n.js'
+
+const { t } = useI18n()
+
 const props = defineProps({
   modelValue: { type: String, default: 'event' },   // 'event' | 'monthly'
 })
 
 const emit = defineEmits(['update:modelValue'])
 
-const options = [
-  { value: 'event', label: '活动榜' },
-  { value: 'monthly', label: '月榜' },
-]
+const options = computed(() => [
+  { value: 'event', label: t('mode.event') },
+  { value: 'monthly', label: t('mode.monthly') },
+])
 
 function select(value) {
   if (value !== props.modelValue) {

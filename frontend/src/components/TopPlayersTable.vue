@@ -2,7 +2,7 @@
   <div>
     <!-- 表头更新时间（与原逻辑一致） -->
     <div class="mb-2 text-right text-[11px] text-md-on-surface-variant">
-      当前更新时间：{{ latestUpdateTime }}
+      {{ t('table.updatedAt', { time: latestUpdateTime }) }}
     </div>
 
     <!-- 十位玩家连成一张 MD3 卡片表格，每位玩家下方多一行热力图 -->
@@ -11,16 +11,16 @@
         <table class="min-w-full text-sm">
           <thead>
             <tr class="bg-md-surface-container-high text-md-on-surface-variant">
-              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">位次</th>
-              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">UID</th>
-              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">名字</th>
-              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">当前PT</th>
-              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">当前分差</th>
-              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">上一整点时速</th>
-              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">时速排名</th>
-              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">周回次数</th>
-              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">平均PT</th>
-              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">签名</th>
+              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">{{ t('table.rank') }}</th>
+              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">{{ t('table.uid') }}</th>
+              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">{{ t('table.name') }}</th>
+              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">{{ t('table.pt') }}</th>
+              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">{{ t('table.gap') }}</th>
+              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">{{ t('table.hourlySpeed') }}</th>
+              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">{{ t('table.speedRank') }}</th>
+              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">{{ t('table.runCount') }}</th>
+              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">{{ t('table.avgPt') }}</th>
+              <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">{{ t('table.signature') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -71,7 +71,7 @@
                     :ref-ts="heatmapRefTs"
                     :global-max="heatmapGlobalMax"
                   />
-                  <div v-else class="text-center text-xs text-md-on-surface-variant py-0.5">暂无热力图数据</div>
+                  <div v-else class="text-center text-xs text-md-on-surface-variant py-0.5">{{ t('table.noHeatmap') }}</div>
                 </td>
               </tr>
             </template>
@@ -86,6 +86,9 @@
 import { computed } from 'vue';
 import Heatmap from './Heatmap.vue';
 import { formatTs } from '../utils.js';
+import { useI18n } from '../i18n.js';
+
+const { t } = useI18n();
 
 const props = defineProps({
   players: Array,

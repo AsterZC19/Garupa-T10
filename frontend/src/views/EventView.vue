@@ -18,16 +18,16 @@
               {{ eventName }}
             </h1>
             <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-md-on-surface-variant justify-center mb-2">
-              <span class="md-chip md-chip--primary">{{ eventTypeZh(currentEvent.type) }}</span>
-              <span>开始: {{ formatTs(currentEvent.start_at) }}</span>
-              <span>结束: {{ formatTs(currentEvent.end_at) }}</span>
-              <span v-if="isUpcoming" class="md-chip">⏳ 未开始</span>
+              <span class="md-chip md-chip--primary">{{ eventTypeLabel(currentEvent.type) }}</span>
+              <span>{{ t('common.start') }}{{ formatTs(currentEvent.start_at) }}</span>
+              <span>{{ t('common.end') }}{{ formatTs(currentEvent.end_at) }}</span>
+              <span v-if="isUpcoming" class="md-chip">{{ t('common.upcomingChip') }}</span>
             </div>
           </div>
           <div class="text-center text-xs text-md-on-surface-variant mt-3">
-            感谢
+            {{ t('event.bestdoriPrefix') }}
             <a href="https://bestdori.com" target="_blank" rel="noopener" class="underline hover:text-md-primary">Bestdori</a>
-            提供数据
+            <template v-if="t('event.bestdoriSuffix')"> {{ t('event.bestdoriSuffix') }}</template>
           </div>
         </div>
         <div v-if="currentEvent.banner_url" class="flex-shrink-0 flex items-center max-w-full">
@@ -43,7 +43,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md-section-title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
-          T10 时速
+          {{ t('event.t10SpeedTitle') }}
         </h3>
         <TopPlayersTable :players="topPlayers" :heatmap-data="heatmapData" />
       </div>
@@ -55,12 +55,12 @@
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md-section-title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M3 13h2l3-8 4 12 3-6 2 2h4" />
             </svg>
-            时速曲线
+            {{ t('event.speedCurveTitle') }}
           </h3>
         </div>
         <div class="md-elevated-card p-4">
           <div v-if="isChartLoading" class="h-[700px] sm:h-[800px] md:h-[900px] flex items-center justify-center text-md-on-surface-variant">
-            <span class="animate-pulse">图表加载中...</span>
+            <span class="animate-pulse">{{ t('common.chartLoading') }}</span>
           </div>
           <ChartComponent v-else :series="chartSeries" :current-event="currentEvent" />
         </div>
@@ -68,14 +68,14 @@
 
       <!-- 活动暂未开始：数据区占位 + 倒计时 -->
       <div v-if="isUpcoming" class="md-elevated-card p-10 text-center">
-        <div class="text-2xl font-bold mb-2">🎵 活动暂未开始</div>
-        <div class="text-sm text-md-on-surface-variant mb-4">距离活动开始还有</div>
+        <div class="text-2xl font-bold mb-2">{{ t('event.upcomingTitle') }}</div>
+        <div class="text-sm text-md-on-surface-variant mb-4">{{ t('event.upcomingSubtitle') }}</div>
         <div class="text-5xl font-bold tabular-nums text-md-primary">{{ countdownText }}</div>
       </div>
 
       <!-- 页脚 -->
       <footer class="pt-6 text-center text-xs text-md-on-surface-variant">
-        由 <span>🎵</span> 构建 /
+        {{ t('common.builtByPrefix') }}<span>Garupa T10</span>{{ t('common.builtBySuffix') }}
         <a href="https://github.com/AsterZC19/Garupa-T10" target="_blank" rel="noopener" class="underline hover:text-md-primary">
           GitHub
         </a>
@@ -93,7 +93,9 @@ import ChartComponent from '../components/ChartComponent.vue'
 import { shallowRef, ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { formatTs } from '../utils.js'
+import { useI18n } from '../i18n.js'
 
+const { t, formatCountdown } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
@@ -112,7 +114,7 @@ const heatmapData = ref({ ref_ts: null, global_max: 0, players: {} })
 const lastTopPlayersContext = ref(null)
 const isInitialEventLoad = ref(true)
 
-const eventName = computed(() => currentEvent.value ? currentEvent.value.name : '加载中...')
+const eventName = computed(() => currentEvent.value ? currentEvent.value.name : t('common.loading'))
 
 // 该活动是否尚未开始（远端已给出新活动，但未到 start_at）
 const isUpcoming = computed(() => {
@@ -120,18 +122,10 @@ const isUpcoming = computed(() => {
   return nowTs.value < currentEvent.value.start_at
 })
 
-// 距离活动开始的倒计时文本（日 时 分 秒）
+// 距离活动开始的倒计时文本
 const countdownText = computed(() => {
   if (!isUpcoming.value || !currentEvent.value) return ''
-  const ms = currentEvent.value.start_at - nowTs.value
-  if (ms <= 0) return '00 日 00 时 00 分 00 秒'
-  const totalSec = Math.floor(ms / 1000)
-  const d = Math.floor(totalSec / 86400)
-  const h = Math.floor((totalSec % 86400) / 3600)
-  const m = Math.floor((totalSec % 3600) / 60)
-  const s = totalSec % 60
-  const pad = n => String(n).padStart(2, '0')
-  return `${pad(d)} 日 ${pad(h)} 时 ${pad(m)} 分 ${pad(s)} 秒`
+  return formatCountdown(currentEvent.value.start_at - nowTs.value)
 })
 
 const isRefreshing = ref(false)
@@ -142,12 +136,12 @@ const countdown = ref(REFRESH_INTERVAL_SECONDS);
 
 const refreshButtonText = computed(() => {
   if (isRefreshing.value) {
-    return '刷新中...';
+    return t('common.refreshing');
   }
   if (isChartLoading.value) {
-    return '图表加载中...';
+    return t('common.chartLoading');
   }
-  return `刷新 (${countdown.value}s)`;
+  return t('common.refreshCountdown', { sec: countdown.value });
 });
 
 async function loadChartDataAsync(eid, interval) {
@@ -375,16 +369,10 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', visHandler)
 })
 
-function eventTypeZh(type) {
-  switch (type) {
-    case "live_try": return "Live 试炼"
-    case "challenge": return "挑战 Live"
-    case "mission_live": return "任务 Live"
-    case "versus": return "竞演 Live"
-    case "medley": return "组曲"
-    case "festival": return "5 v 5"
-    default: return type
-  }
+function eventTypeLabel(type) {
+  const key = `event.type.${type}`
+  const label = t(key)
+  return label === key ? type : label
 }
 </script>
 

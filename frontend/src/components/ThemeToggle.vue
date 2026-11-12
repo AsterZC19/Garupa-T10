@@ -46,13 +46,15 @@
 <script setup>
 import { computed } from 'vue'
 import { useTheme } from '../theme.js'
+import { useI18n } from '../i18n.js'
 
 const { themeMode, isDark, toggleTheme } = useTheme()
+const { t } = useI18n()
 
 const buttonTitle = computed(() => {
-  const modeLabel = isDark.value ? '夜间模式' : '日间模式'
-  const autoSuffix = themeMode.value === 'system' ? '（跟随系统）' : ''
-  const nextLabel = isDark.value ? '日间模式' : '夜间模式'
-  return `当前：${modeLabel}${autoSuffix}，点击切换至${nextLabel}`
+  const modeLabel = isDark.value ? t('theme.dark') : t('theme.light')
+  const autoSuffix = themeMode.value === 'system' ? t('theme.systemSuffix') : ''
+  const nextLabel = isDark.value ? t('theme.light') : t('theme.dark')
+  return t('theme.toggleTitle', { current: modeLabel, suffix: autoSuffix, next: nextLabel })
 })
 </script>

@@ -53,11 +53,14 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from '../i18n.js'
+
+const { t } = useI18n()
 
 const props = defineProps({
   options: { type: Array, default: () => [] },   // [{ value, label }]
   modelValue: [String, Number],
-  placeholder: { type: String, default: '请选择' },
+  placeholder: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -68,7 +71,7 @@ const focusIndex = ref(-1)
 
 const selectedLabel = computed(() => {
   const hit = props.options.find(opt => opt.value === props.modelValue)
-  return hit ? hit.label : props.placeholder
+  return hit ? hit.label : (props.placeholder || t('common.selectPlaceholder'))
 })
 
 function toggle() {

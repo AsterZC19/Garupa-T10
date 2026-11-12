@@ -1,8 +1,8 @@
 <template>
   <div class="relative w-full h-[700px] sm:h-[800px] md:h-[900px]">
     <div class="flex justify-end gap-2 mb-2">
-      <button @click="hideAll" class="md-text-button text-xs">隐藏所有</button>
-      <button @click="showAll" class="md-text-button text-xs">显示所有</button>
+      <button @click="hideAll" class="md-text-button text-xs">{{ t('chart.hideAll') }}</button>
+      <button @click="showAll" class="md-text-button text-xs">{{ t('chart.showAll') }}</button>
     </div>
     <canvas ref="canvasRef" class="w-full h-full block"></canvas>
     <div ref="controlsRef" class="absolute flex items-start gap-2" style="left: -9999px; top: 0;">
@@ -22,13 +22,22 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, watch, ref } from 'vue'
+import { onMounted, onBeforeUnmount, watch, ref, computed } from 'vue'
 import { Chart, LineController, LineElement, PointElement, TimeScale, LinearScale, Legend, Tooltip } from 'chart.js'
 import 'chartjs-adapter-date-fns';
-import { zhCN } from 'date-fns/locale';
+import { zhCN, ja, enUS } from 'date-fns/locale';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { isDark } from '../theme.js';
+import { useI18n } from '../i18n.js';
 Chart.register(LineController, LineElement, PointElement, TimeScale, LinearScale, Legend, Tooltip, zoomPlugin);
+
+const { locale, t } = useI18n();
+
+const chartDateLocale = computed(() => {
+  if (locale.value === 'ja') return ja;
+  if (locale.value === 'en') return enUS;
+  return zhCN;
+});
 
 const props = defineProps({
   series: Object,
@@ -193,6 +202,7 @@ const draw = () => {
     chart.options.scales.y.grid.color = gridColor
     chart.options.scales.x.ticks.color = tickColor
     chart.options.scales.y.ticks.color = tickColor
+    chart.options.scales.x.adapters.date.locale = chartDateLocale.value
     chart.options.plugins.legend.labels.color = labelColor
     Object.assign(chart.options.plugins.tooltip, tooltipOpts)
     chart.update('none')
@@ -261,7 +271,7 @@ const draw = () => {
           ticks: { color: tickColor },
           adapters: {
             date: {
-              locale: zhCN
+              locale: chartDateLocale.value
             }
           },
           time: {
@@ -303,8 +313,8 @@ onBeforeUnmount(() => {
   }
 })
 
-// Shallow watch - only triggers when object references or theme changes
-watch([() => props.series, () => props.currentEvent, isDark], draw, { flush: 'post' })
+// Shallow watch - only triggers when object references, theme, or locale changes
+watch([() => props.series, () => props.currentEvent, isDark, locale], draw, { flush: 'post' })
 </script>
 
 <style scoped>

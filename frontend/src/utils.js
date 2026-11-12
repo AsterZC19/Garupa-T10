@@ -1,4 +1,6 @@
 // frontend/src/utils.js
+import { dateLocaleTag } from './i18n.js';
+
 export function formatTs(ms, format = 'full') {
   if (!ms) return '-';
   const date = new Date(ms);
@@ -10,7 +12,7 @@ export function formatTs(ms, format = 'full') {
   }
 
   // Default to full date-time string
-  return date.toLocaleString('zh-CN');
+  return date.toLocaleString(dateLocaleTag.value);
 }
 
 // 热力图配色：5 档低饱和莫兰迪雾霾蓝渐变，intensity 0→1（浅→深），温润护眼

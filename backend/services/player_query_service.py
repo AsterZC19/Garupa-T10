@@ -58,6 +58,28 @@ def get_localized_name(value):
     return str(value) if value else ''
 
 
+def get_localized_names(value, fallback_id=''):
+    if isinstance(value, list):
+        default_name = get_localized_name(value)
+        jp = value[0] if len(value) > 0 and value[0] else None
+        en = value[1] if len(value) > 1 and value[1] else None
+        tw = value[2] if len(value) > 2 and value[2] else None
+        cn = value[3] if len(value) > 3 and value[3] else None
+        return {
+            'zh': cn or tw or default_name or f'道具 {fallback_id}',
+            'ja': jp or default_name or f'エリアアイテム {fallback_id}',
+            'en': en or jp or default_name or f'Area Item {fallback_id}',
+        }
+    if value:
+        text = str(value)
+        return {'zh': text, 'ja': text, 'en': text}
+    return {
+        'zh': f'道具 {fallback_id}',
+        'ja': f'エリアアイテム {fallback_id}',
+        'en': f'Area Item {fallback_id}',
+    }
+
+
 def extract_area_item_levels(profile):
     area_items_meta = get_area_items()
     enabled_area_items = profile.get('enabledUserAreaItems', {}).get('entries', [])
@@ -70,7 +92,8 @@ def extract_area_item_levels(profile):
 
         level = item.get('level') or 0
         meta = area_items_meta.get(item_id) or {}
-        name = get_localized_name(meta.get('areaItemName') or meta.get('name')) or f'道具 {item_id}'
+        raw_name = meta.get('areaItemName') or meta.get('name')
+        name = get_localized_name(raw_name) or f'道具 {item_id}'
         existing = items_by_id.get(item_id)
         if existing and existing['level'] >= level:
             continue
@@ -78,6 +101,7 @@ def extract_area_item_levels(profile):
         items_by_id[item_id] = {
             'id': item_id,
             'name': name,
+            'names': get_localized_names(raw_name, item_id),
             'level': level
         }
 

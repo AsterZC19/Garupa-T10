@@ -21,7 +21,7 @@
             <!-- 汉堡按钮 -->
             <button
               @click="sidebarOpen = !sidebarOpen"
-              aria-label="切换导航"
+              :aria-label="t('app.toggleNav')"
               class="md-icon-button focus:outline-none"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -31,16 +31,14 @@
 
             <!-- 标题 -->
             <router-link to="/" class="ml-2 sm:ml-4 flex items-center gap-2 group">
-              <span class="flex items-center justify-center h-8 w-8 rounded-full bg-md-primary-container text-md-on-primary-container font-bold">
-                🎵
-              </span>
               <h1 class="text-lg sm:text-xl font-semibold text-md-on-surface group-hover:text-md-primary transition-colors">
-                日服 T10 追踪
+                {{ t('app.title') }}
               </h1>
             </router-link>
 
-            <!-- 顶栏右侧：日/夜间模式切换（自动检测 + 手动切换） -->
-            <div class="ml-auto flex items-center">
+            <!-- 顶栏右侧：语言切换 + 日/夜间模式切换 -->
+            <div class="ml-auto flex items-center gap-1">
+              <LanguageSwitcher />
               <ThemeToggle />
             </div>
           </div>
@@ -63,7 +61,10 @@
 import { ref } from 'vue';
 import Sidebar from './components/Sidebar.vue';
 import ThemeToggle from './components/ThemeToggle.vue';
+import LanguageSwitcher from './components/LanguageSwitcher.vue';
+import { useI18n } from './i18n.js';
 
+const { t } = useI18n();
 const sidebarOpen = ref(false);
 </script>
 

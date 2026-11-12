@@ -4,7 +4,7 @@
       :options="selectOptions"
       v-model="value"
       class="w-full max-w-[300px] sm:max-w-sm"
-      placeholder="选择活动"
+      :placeholder="t('event.selectPlaceholder')"
     />
   </div>
 </template>
@@ -13,6 +13,9 @@
 import { computed } from 'vue'
 import MdSelect from './MdSelect.vue'
 import { formatTs } from '../utils.js'
+import { useI18n } from '../i18n.js'
+
+const { t } = useI18n()
 
 const props = defineProps({
   events: Array,
