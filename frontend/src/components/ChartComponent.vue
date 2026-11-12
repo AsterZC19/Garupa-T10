@@ -27,6 +27,7 @@ import { Chart, LineController, LineElement, PointElement, TimeScale, LinearScal
 import 'chartjs-adapter-date-fns';
 import { zhCN } from 'date-fns/locale';
 import zoomPlugin from 'chartjs-plugin-zoom';
+import { isDark } from '../theme.js';
 Chart.register(LineController, LineElement, PointElement, TimeScale, LinearScale, Legend, Tooltip, zoomPlugin);
 
 const props = defineProps({
@@ -79,7 +80,7 @@ function panChart(x, y) {
   chart.pan({ x, y }, undefined, 'default');
 }
 
-const colorPalette = [
+const lightColorPalette = [
   '#5B8FF9', // Light Blue
   '#FF69B4', // Hot Pink
   '#6A0DAD', // Purple
@@ -102,6 +103,30 @@ const colorPalette = [
   '#BA55D3'  // Medium Orchid
 ];
 
+// 夜间模式柔和折线配色：替换过暗的深蓝/深紫，确保在柔和暗底上清晰且不刺眼
+const darkColorPalette = [
+  '#7AA7FF', // Soft Sky Blue
+  '#FF85C2', // Soft Hot Pink
+  '#B88CFF', // Soft Lavender Purple
+  '#5CD6FF', // Soft Cyan Blue
+  '#FF66B3', // Soft Rose Pink
+  '#A67BFF', // Soft Violet
+  '#6E9BFF', // Soft Royal Blue
+  '#F06292', // Soft Magenta Rose
+  '#B39DDB', // Soft Medium Purple
+  '#4FC3F7', // Soft Dodger Blue
+  '#F8BBD0', // Pastel Pink
+  '#8C9EFF', // Soft Indigo
+  '#F48FB1', // Soft Coral Pink
+  '#90CAF9', // Light Sky Blue
+  '#CE93D8', // Soft Orchid
+  '#64B5F6', // Soft Azure
+  '#FFCCBC', // Soft Peach
+  '#9FA8DA', // Soft Slate Blue
+  '#4DB6AC', // Soft Teal Green
+  '#BA68C8'  // Soft Medium Orchid
+];
+
 function downsamplePoints(points, maxPoints) {
   if (!points || points.length <= maxPoints) return points
   const result = [points[0]]
@@ -120,9 +145,10 @@ function downsamplePoints(points, maxPoints) {
 
 function buildDatasets(series, event) {
   if (!series) return []
+  const palette = isDark.value ? darkColorPalette : lightColorPalette
   return Object.keys(series).map((uid, index) => {
     const userSeries = series[uid]
-    const color = colorPalette[index % colorPalette.length]
+    const color = palette[index % palette.length]
     const rawPoints = userSeries.points || []
     const sampled = downsamplePoints(rawPoints, MAX_POINTS_PER_DATASET)
     return {
@@ -277,17 +303,8 @@ onBeforeUnmount(() => {
   }
 })
 
-// Shallow watch - only triggers when object references change
-watch([() => props.series, () => props.currentEvent], draw, { flush: 'post' })
-
-// 主题切换时重建图表（网格/文字颜色随 MD3 主题）
-const darkMedia = window.matchMedia('(prefers-color-scheme: dark)')
-const onThemeChange = () => draw()
-darkMedia.addEventListener('change', onThemeChange)
-
-onBeforeUnmount(() => {
-  darkMedia.removeEventListener('change', onThemeChange)
-})
+// Shallow watch - only triggers when object references or theme changes
+watch([() => props.series, () => props.currentEvent, isDark], draw, { flush: 'post' })
 </script>
 
 <style scoped>

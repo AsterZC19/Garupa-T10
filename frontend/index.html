@@ -6,6 +6,21 @@
     <title>日服 T10 追踪 · Garupa T10</title>
     <meta name="theme-color" content="#F5F7FC" />
     <link rel="icon" href="/favicon.ico" sizes="any">
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('garupa-theme-mode');
+          var sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var isDark = saved === 'dark' || (saved !== 'light' && sysDark);
+          var root = document.documentElement;
+          root.classList.toggle('dark', isDark);
+          root.classList.toggle('light', !isDark);
+          root.dataset.theme = isDark ? 'dark' : 'light';
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', isDark ? '#1b1f2a' : '#F5F7FC');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

@@ -22,7 +22,7 @@
             <button
               @click="sidebarOpen = !sidebarOpen"
               aria-label="切换导航"
-              class="p-2 rounded-full text-md-on-surface-variant hover:bg-md-surface-highest transition-colors focus:outline-none"
+              class="md-icon-button focus:outline-none"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -38,6 +38,11 @@
                 日服 T10 追踪
               </h1>
             </router-link>
+
+            <!-- 顶栏右侧：日/夜间模式切换（自动检测 + 手动切换） -->
+            <div class="ml-auto flex items-center">
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </header>
@@ -57,6 +62,7 @@
 <script setup>
 import { ref } from 'vue';
 import Sidebar from './components/Sidebar.vue';
+import ThemeToggle from './components/ThemeToggle.vue';
 
 const sidebarOpen = ref(false);
 </script>

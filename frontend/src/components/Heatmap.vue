@@ -25,8 +25,9 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed } from 'vue'
 import { heatColor } from '../utils.js'
+import { isDark } from '../theme.js'
 
 const props = defineProps({
   counts: { type: Array, default: () => [] },   // index 0 最旧
@@ -44,13 +45,6 @@ const cells = computed(() => {
   }
   return arr
 })
-
-// 深色模式感知：格子颜色随主题切换
-const darkMedia = window.matchMedia('(prefers-color-scheme: dark)')
-const isDark = ref(darkMedia.matches)
-function onDarkChange(e) { isDark.value = e.matches }
-onMounted(() => darkMedia.addEventListener('change', onDarkChange))
-onBeforeUnmount(() => darkMedia.removeEventListener('change', onDarkChange))
 
 function cellStyle(cell) {
   const intensity = props.globalMax > 0 ? cell.value / props.globalMax : 0
