@@ -38,7 +38,6 @@ export const dateLocaleTag = computed(() => {
 const messages = {
   zh: {
     'app.title': '日服 T10 追踪',
-    'app.docTitle': '日服 T10 追踪 · Garupa T10',
     'app.toggleNav': '切换导航',
     'nav.events': '活动',
     'nav.monthly': '月榜',
@@ -132,7 +131,6 @@ const messages = {
   },
   ja: {
     'app.title': 'ガルパ T10 トラッカー',
-    'app.docTitle': 'ガルパ T10 トラッカー · Garupa T10',
     'app.toggleNav': 'メニューを切り替え',
     'nav.events': 'イベント',
     'nav.monthly': 'マンスリー',
@@ -226,7 +224,6 @@ const messages = {
   },
   en: {
     'app.title': 'Garupa JP T10 Tracker',
-    'app.docTitle': 'Garupa JP T10 Tracker · Garupa T10',
     'app.toggleNav': 'Toggle navigation',
     'nav.events': 'Events',
     'nav.monthly': 'Monthly',
@@ -350,7 +347,6 @@ export function formatCountdown(ms) {
 function syncDocumentMeta() {
   if (typeof document === 'undefined') return
   document.documentElement.lang = dateLocaleTag.value
-  document.title = t('app.docTitle')
 }
 
 export function setLocale(newLocale) {

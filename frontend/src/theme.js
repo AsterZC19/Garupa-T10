@@ -39,7 +39,7 @@ function applyThemeToDom(dark) {
 
   const metaThemeColor = document.querySelector('meta[name="theme-color"]')
   if (metaThemeColor) {
-    metaThemeColor.setAttribute('content', dark ? '#1b1f2a' : '#F5F7FC')
+    metaThemeColor.setAttribute('content', dark ? '#1b1f2a' : '#f1f4f8')
   }
 }
 

@@ -7,7 +7,7 @@
       :aria-label="t('lang.switchLabel')"
       aria-haspopup="listbox"
       :aria-expanded="open"
-      class="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full text-xs font-medium text-md-on-surface-variant hover:bg-md-surface-container-high hover:text-md-on-surface transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-md-primary"
+      class="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-full text-xs font-medium text-md-on-surface-variant hover:bg-md-surface-high hover:text-md-on-surface transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-md-primary"
     >
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18z" />
@@ -42,7 +42,7 @@
           role="option"
           :aria-selected="locale === opt.value"
           @click="selectLocale(opt.value)"
-          class="w-full px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 transition-colors text-left hover:bg-md-surface-container-high focus:outline-none"
+          class="w-full px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 transition-colors text-left hover:bg-md-surface-high focus:outline-none"
           :class="locale === opt.value ? 'text-md-primary font-semibold' : 'text-md-on-surface'"
         >
           <span>{{ opt.label }}</span>

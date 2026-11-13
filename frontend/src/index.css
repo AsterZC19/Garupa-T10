@@ -98,48 +98,6 @@ html.dark {
   --md-elevation-2: 0 2px 6px rgba(8, 12, 20, 0.32), 0 4px 14px rgba(8, 12, 20, 0.22);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]):not(.light) {
-    color-scheme: dark;
-
-    --md-sys-color-primary: #8ca6c6;
-    --md-sys-color-on-primary: #182638;
-    --md-sys-color-primary-container: #2e3f57;
-    --md-sys-color-on-primary-container: #d5e0ee;
-    --md-sys-color-secondary: #a8b3c4;
-    --md-sys-color-on-secondary: #252e3d;
-    --md-sys-color-secondary-container: #323b4b;
-    --md-sys-color-on-secondary-container: #d6deeb;
-    --md-sys-color-error: #e59890;
-    --md-sys-color-on-error: #5c1914;
-    --md-sys-color-error-container: #7d2923;
-    --md-sys-color-on-error-container: #f9dad6;
-
-    --md-sys-color-surface: #202532;
-    --md-sys-color-on-surface: #d8dde8;
-    --md-sys-color-on-surface-variant: #9fa8ba;
-    --md-sys-color-outline: #687184;
-    --md-sys-color-outline-variant: #343b4b;
-    --md-sys-color-surface-container-lowest: #222734;
-    --md-sys-color-surface-container-low: #262b38;
-    --md-sys-color-surface-container: #1b1f2a;
-    --md-sys-color-surface-container-high: #2c3240;
-    --md-sys-color-surface-container-highest: #343b4c;
-    --md-sys-color-surface-tint: #8ca6c6;
-    --md-sys-color-inverse-surface: #d8dde8;
-    --md-sys-color-on-inverse-surface: #252a36;
-    --md-sys-color-inverse-primary: #4d6584;
-
-    --md-sys-color-increment: #72b388;
-    --md-sys-color-decrement: #d98a84;
-    --md-sys-color-pt: #8aa4c4;
-    --md-sys-color-title: #9aa7be;
-
-    --md-elevation-1: 0 1px 3px rgba(8, 12, 20, 0.28);
-    --md-elevation-2: 0 2px 6px rgba(8, 12, 20, 0.32), 0 4px 14px rgba(8, 12, 20, 0.22);
-  }
-}
-
 /* ============================================================================
    基础样式
    ========================================================================== */

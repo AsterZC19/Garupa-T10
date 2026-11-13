@@ -3,13 +3,16 @@
   <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-    <title>日服 T10 追踪 · Garupa T10</title>
-    <meta name="theme-color" content="#F5F7FC" />
+    <title>Garupa T10</title>
+    <meta name="theme-color" content="#f1f4f8" />
     <link rel="icon" href="/favicon.ico" sizes="any">
     <script>
       (function () {
+        var saved = null;
         try {
-          var saved = localStorage.getItem('garupa-theme-mode');
+          saved = localStorage.getItem('garupa-theme-mode');
+        } catch (e) {}
+        try {
           var sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
           var isDark = saved === 'dark' || (saved !== 'light' && sysDark);
           var root = document.documentElement;
@@ -17,7 +20,7 @@
           root.classList.toggle('light', !isDark);
           root.dataset.theme = isDark ? 'dark' : 'light';
           var meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute('content', isDark ? '#1b1f2a' : '#F5F7FC');
+          if (meta) meta.setAttribute('content', isDark ? '#1b1f2a' : '#f1f4f8');
         } catch (e) {}
       })();
     </script>
