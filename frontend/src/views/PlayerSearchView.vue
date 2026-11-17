@@ -16,105 +16,74 @@
         <p class="text-lg text-md-on-surface-variant">{{ t('common.loading') }}</p>
       </div>
 
-      <!-- 查到玩家 -->
+      <!-- 查到玩家（实时资料 或 本地归档战绩） -->
       <div
-        v-else-if="playerData && playerData.profile"
-        class="md-elevated-card rounded-3xl overflow-hidden w-full lg:max-w-[70vw] mx-auto"
+        v-else-if="(playerData && playerData.profile) || hasLocalCareer"
+        class="max-w-7xl mx-auto space-y-6"
       >
-        <div class="lg:flex">
+        <div
+          v-if="playerData && playerData.profile"
+          class="md-elevated-card rounded-3xl overflow-hidden w-full"
+        >
+          <div class="lg:flex">
 
-          <!-- 左列：头像、基础信息、称号、自我介绍 -->
-          <div class="lg:w-1/2 p-4 sm:p-6 space-y-4">
+            <!-- 左列：头像、基础信息、称号、自我介绍 -->
+            <div class="lg:w-1/2 p-4 sm:p-6 space-y-4">
 
-            <!-- 头像 -->
-            <div v-if="leaderCardIllustUrl" class="relative">
-              <img
-                :src="leaderCardIllustUrl"
-                alt="Player Illustration"
-                class="w-full h-auto object-cover rounded-2xl"
-              />
-            </div>
-
-            <!-- 基本资料 -->
-            <div class="text-center">
-              <div ref="usernameAnchor" class="flex items-center justify-center gap-1.5">
-                <h2 class="min-w-0 break-all text-3xl sm:text-4xl font-bold text-md-on-surface">
-                  {{ playerData.name || playerData.profile.userName || '&nbsp;' }}
-                </h2>
-                <PlayerNameHistory :key="playerData.uid" :uid="playerData.uid" :entries="playerData.name_history" :anchor="usernameAnchor" />
-              </div>
-              <div class="flex items-center justify-center text-md-on-surface-variant mt-1 text-sm font-medium">
-                <span>UID: {{ playerData.profile.publishUserIdFlg ? playerData.profile.userId : t('player.privateId') }}</span>
-                <span class="mx-2 opacity-30">|</span>
-                <span>{{ t('player.rank', { rank: playerData.profile.rank }) }}</span>
-              </div>
-            </div>
-
-            <!-- 称号 -->
-            <div
-              v-if="playerData.profile.userProfileDegreeMap && playerData.profile.userProfileDegreeMap.entries && allDegreesData"
-              class="pb-2 w-full overflow-visible"
-            >
-              <div class="flex flex-wrap justify-center items-center gap-2 sm:gap-3 w-full">
-                <DegreeDisplay
-                  v-for="degree in playerData.profile.userProfileDegreeMap.entries"
-                  :key="degree.degreeId"
-                  :degreeId="degree.degreeId"
-                  :allDegreesData="allDegreesData"
-                  :displayWidth="150"
+              <!-- 头像 -->
+              <div v-if="leaderCardIllustUrl" class="relative">
+                <img
+                  :src="leaderCardIllustUrl"
+                  alt="Player Illustration"
+                  class="w-full h-auto object-cover rounded-2xl"
                 />
               </div>
-            </div>
 
-            <!-- 签名 -->
-            <div class="text-center px-4 py-2 bg-md-surface-container rounded-xl italic">
-              <p class="text-sm text-md-on-surface-variant">
-                {{ playerData.profile.introduction || '' }}
-              </p>
-            </div>
-          </div>
-
-          <!-- 右列：T10 记录、主乐队、综合力、乐队等级、角色等级 -->
-          <div class="lg:w-1/2 p-4 sm:p-6 space-y-6 border-t lg:border-t-0 lg:border-l md-divider">
-
-            <!-- T10 记录 -->
-            <div class="pt-2 border-b md-divider pb-6">
-              <h3 class="text-lg font-bold text-md-on-surface mb-4 text-center">{{ t('player.t10Records') }}</h3>
-
-              <div
-                v-if="earnedDegrees && earnedDegrees.length > 0"
-                class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-2"
-              >
-                <div
-                  v-for="degree in earnedDegrees"
-                  :key="degree.event_id"
-                  class="p-2 bg-md-surface-container-high hover:bg-md-surface-container-highest rounded-xl transition-all duration-200 flex flex-col items-center border border-transparent hover:border-md-primary"
-                >
-                  <!-- 活动信息 -->
-                  <router-link :to="'/' + degree.event_id" class="text-center mb-1">
-                    <p class="font-bold text-md-primary text-[10px]">
-                      {{ t('player.eventNum', { id: degree.event_id }) }}
-                    </p>
-                    <p class="text-[11px] text-md-on-surface-variant font-medium">
-                      {{ t('player.rankPlace', { rank: degree.rank }) }}
-                    </p>
-                  </router-link>
-
-                  <!-- 称号 -->
-                  <div class="w-full min-h-6 flex justify-center items-center overflow-visible">
-                    <DegreeDisplay
-                      :rank="degree.rank"
-                      :event_id="degree.event_id"
-                      :displayWidth="104"
-                    />
-                  </div>
+              <!-- 基本资料 -->
+              <div class="text-center">
+                <div ref="usernameAnchor" class="flex items-center justify-center gap-1.5">
+                  <h2 class="min-w-0 break-all text-3xl sm:text-4xl font-bold text-md-on-surface">
+                    {{ playerData.name || playerData.profile.userName || '&nbsp;' }}
+                  </h2>
+                  <PlayerNameHistory :key="playerData.uid" :uid="playerData.uid" :entries="playerData.name_history" :anchor="usernameAnchor" />
+                </div>
+                <div class="flex items-center justify-center text-md-on-surface-variant mt-1 text-sm font-medium">
+                  <span>UID: {{ playerData.profile.publishUserIdFlg ? playerData.profile.userId : t('player.privateId') }}</span>
+                  <span class="mx-2 opacity-30">|</span>
+                  <span>{{ t('player.rank', { rank: playerData.profile.rank }) }}</span>
                 </div>
               </div>
 
-              <!-- 无记录 -->
-              <div v-else class="text-center py-8">
-                <p class="text-md-on-surface-variant text-sm">{{ t('player.noT10Records') }}</p>
+              <!-- 称号 -->
+              <div
+                v-if="playerData.profile.userProfileDegreeMap && playerData.profile.userProfileDegreeMap.entries && allDegreesData"
+                class="pb-2 w-full overflow-visible"
+              >
+                <div class="flex flex-wrap justify-center items-center gap-2 sm:gap-3 w-full">
+                  <DegreeDisplay
+                    v-for="degree in playerData.profile.userProfileDegreeMap.entries"
+                    :key="degree.degreeId"
+                    :degreeId="degree.degreeId"
+                    :allDegreesData="allDegreesData"
+                    :displayWidth="150"
+                  />
+                </div>
               </div>
+
+              <!-- 签名 -->
+              <div class="text-center px-4 py-2 bg-md-surface-container rounded-xl italic">
+                <p class="text-sm text-md-on-surface-variant">
+                  {{ playerData.profile.introduction || '' }}
+                </p>
+              </div>
+            </div>
+
+            <!-- 右列：T10 记录、主乐队、综合力、乐队等级、角色等级、基建等级 -->
+            <div class="lg:w-1/2 p-4 sm:p-6 space-y-6 border-t lg:border-t-0 lg:border-l md-divider">
+
+            <!-- T10 记录 -->
+            <div class="pt-2 border-b md-divider pb-6">
+              <PlayerT10Grid :records="mergedEventRecords" />
             </div>
 
             <!-- 主乐队 (Responsive Scaling) -->
@@ -287,8 +256,32 @@
               </div>
             </div>
 
+            </div>
           </div>
         </div>
+
+        <!-- 仅本地有归档记录但实时名片不可用时的提示头 -->
+        <div v-else class="md-elevated-card p-5 space-y-5">
+          <div class="text-center space-y-1">
+            <div class="text-xl font-bold text-md-on-surface">UID: {{ searchedUid }}</div>
+            <p class="text-xs text-md-on-surface-variant">{{ t('player.localOnlyNotice') }}</p>
+          </div>
+          <div v-if="mergedEventRecords.length > 0" class="pt-4 border-t md-divider">
+            <PlayerT10Grid
+              :records="mergedEventRecords"
+              grid-class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2"
+            />
+          </div>
+        </div>
+
+        <!-- 历届活动与月榜 PT 曲线 + 多期对比 -->
+        <PlayerCareerSection
+          :uid="searchedUid"
+          :current-name="currentPlayerName"
+          :merged-events="mergedEventRecords"
+          :monthly-records="careerData.monthly"
+          :all-degrees-data="allDegreesData"
+        />
       </div>
 
       <!-- 未找到玩家 -->
@@ -322,6 +315,8 @@ import { useRoute, useRouter } from 'vue-router';
 import api from '../api';
 import PlayerSearch from '../components/PlayerSearch.vue';
 import PlayerNameHistory from '../components/PlayerNameHistory.vue';
+import PlayerT10Grid from '../components/PlayerT10Grid.vue';
+import PlayerCareerSection from '../components/PlayerCareerSection.vue';
 import DegreeDisplay from '../components/DegreeDisplay.vue';
 import CardIcon from '../components/CardIcon.vue';
 import { useI18n } from '../i18n.js';
@@ -377,7 +372,66 @@ const searchedUid = ref('');
 const playerData = ref(null);
 const isLoading = ref(false);
 const earnedDegrees = ref([]);
+const careerData = ref({ events: [], monthly: [] });
 const leaderCardIllustUrl = ref(null);
+let activeRequestId = 0;
+
+const hasLocalCareer = computed(() =>
+  (careerData.value?.events?.length || 0) > 0 || (careerData.value?.monthly?.length || 0) > 0
+);
+
+const currentPlayerName = computed(() =>
+  playerData.value?.name || playerData.value?.profile?.userName || ''
+);
+
+const mergedEventRecords = computed(() => {
+  const byId = new Map();
+
+  for (const ev of careerData.value?.events || []) {
+    const eid = String(ev.event_id);
+    byId.set(eid, { ...ev, event_id: eid });
+  }
+
+  for (const deg of earnedDegrees.value || []) {
+    const eid = String(deg.event_id);
+    if (!byId.has(eid)) {
+      byId.set(eid, {
+        event_id: eid,
+        rank: deg.rank,
+        pt: null,
+        name_used: null,
+        signature: '',
+        event_name: null,
+        event_type: null,
+        start_at: null,
+        end_at: null,
+        has_local_detail: false,
+        has_chart: false,
+      });
+    }
+  }
+
+  for (const t10 of playerData.value?.t10_events || []) {
+    const eid = String(t10.event_id);
+    if (!byId.has(eid)) {
+      byId.set(eid, {
+        event_id: eid,
+        rank: t10.rank,
+        pt: null,
+        name_used: null,
+        signature: '',
+        event_name: null,
+        event_type: null,
+        start_at: null,
+        end_at: null,
+        has_local_detail: false,
+        has_chart: false,
+      });
+    }
+  }
+
+  return Array.from(byId.values()).sort((a, b) => (Number(b.event_id) || 0) - (Number(a.event_id) || 0));
+});
 
 watch(playerData, async (newPlayerData) => {
   if (!newPlayerData || !newPlayerData.profile) {
@@ -437,22 +491,32 @@ const handleSearch = () => {
 
 const fetchPlayerData = async (playerUid) => {
   if (!playerUid) return;
+  const reqId = ++activeRequestId;
   isLoading.value = true;
   playerData.value = null;
   earnedDegrees.value = [];
+  careerData.value = { events: [], monthly: [] };
   searchedUid.value = playerUid;
   try {
-    const [res, degreesRes] = await Promise.all([
+    const [playerRes, degreesRes, careerRes] = await Promise.allSettled([
       api.get(`/api/player/${playerUid}`),
-      api.get(`/api/degrees/player/${playerUid}/all_degrees`)
+      api.get(`/api/degrees/player/${playerUid}/all_degrees`),
+      api.get(`/api/player/${playerUid}/career`),
     ]);
-    playerData.value = res.data;
-    earnedDegrees.value = degreesRes.data;
+    if (reqId !== activeRequestId) return;
+    playerData.value = playerRes.status === 'fulfilled' ? playerRes.value.data : null;
+    earnedDegrees.value = degreesRes.status === 'fulfilled' ? (degreesRes.value.data || []) : [];
+    careerData.value = careerRes.status === 'fulfilled'
+      ? (careerRes.value.data || { events: [], monthly: [] })
+      : { events: [], monthly: [] };
   } catch (error) {
+    if (reqId !== activeRequestId) return;
     console.error('获取玩家数据失败:', error);
     playerData.value = null;
   } finally {
-    isLoading.value = false;
+    if (reqId === activeRequestId) {
+      isLoading.value = false;
+    }
   }
 };
 
@@ -468,9 +532,13 @@ watch(() => route.params.uid, (newUid) => {
     inputUid.value = newUid;
     fetchPlayerData(newUid);
   } else {
+    activeRequestId++;
+    isLoading.value = false;
     inputUid.value = '';
     searchedUid.value = '';
     playerData.value = null;
+    earnedDegrees.value = [];
+    careerData.value = { events: [], monthly: [] };
   }
 }, { immediate: true });
 </script>
