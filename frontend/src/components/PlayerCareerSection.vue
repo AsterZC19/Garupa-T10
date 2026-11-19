@@ -17,7 +17,7 @@
       <!-- 多期个人曲线对比面板（勾选 >= 1 个有曲线的活动后展示） -->
       <div
         v-if="compareEventIds.length > 0"
-        class="mb-5 rounded-2xl bg-md-surface-container-low border border-md-outline-variant p-4"
+        class="mb-5 rounded-2xl bg-md-surface-low border border-md-outline-variant p-4"
       >
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div>
@@ -54,7 +54,7 @@
         <article
           v-for="ev in trendEvents"
           :key="ev.event_id"
-          class="rounded-2xl bg-md-surface-container-low/70 border border-md-outline-variant/80 p-4 flex flex-col gap-3 transition-colors hover:border-md-outline"
+          class="rounded-2xl bg-md-surface-low/70 border border-md-outline-variant/80 p-4 flex flex-col gap-3 transition-colors hover:border-md-outline"
           :class="{ 'lg:col-span-2': expandedEvents[ev.event_id] }"
         >
           <!-- 头部：期数 + 类型 + 标题 + 跳转 -->
@@ -116,7 +116,7 @@
           <!-- 当时冲榜名字与签名（呼应改名历史） -->
           <div
             v-if="ev.has_local_detail && (ev.name_used || ev.signature)"
-            class="rounded-xl bg-md-surface-container-lowest/90 border border-md-outline-variant/60 px-3 py-2 space-y-1 text-xs"
+            class="rounded-xl bg-md-surface-lowest/90 border border-md-outline-variant/60 px-3 py-2 space-y-1 text-xs"
           >
             <div v-if="ev.name_used" class="flex flex-wrap items-center gap-1.5">
               <span class="font-medium text-md-on-surface">{{ ev.name_used }}</span>
@@ -135,7 +135,7 @@
           <!-- 交互控制栏 -->
           <div
             v-if="ev.has_local_detail && ev.has_chart"
-            class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t md-divider/60"
+            class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-md-outline-variant/60"
           >
             <button
               type="button"
@@ -156,7 +156,7 @@
               </svg>
             </button>
 
-            <label class="inline-flex items-center gap-1.5 text-xs text-md-on-surface-variant cursor-pointer select-none px-2 py-1 rounded-full hover:bg-md-surface-container-high">
+            <label class="inline-flex items-center gap-1.5 text-xs text-md-on-surface-variant cursor-pointer select-none px-2 py-1 rounded-full hover:bg-md-surface-high">
               <input
                 type="checkbox"
                 :checked="compareEventIds.includes(ev.event_id)"
@@ -170,7 +170,7 @@
           <!-- 展开详情：个人 PT 曲线 + 同场参考线 -->
           <div
             v-if="expandedEvents[ev.event_id]"
-            class="pt-3 border-t md-divider/60 space-y-3"
+            class="pt-3 border-t border-md-outline-variant/60 space-y-3"
           >
             <div v-if="loadingEvents[ev.event_id]" class="py-8 text-center text-xs text-md-on-surface-variant animate-pulse">
               {{ t('player.detailLoading') }}
@@ -221,7 +221,7 @@
         <article
           v-for="m in monthlyRecords"
           :key="m.monthly_id"
-          class="rounded-2xl bg-md-surface-container-low/70 border border-md-outline-variant/80 p-4 flex flex-col gap-3"
+          class="rounded-2xl bg-md-surface-low/70 border border-md-outline-variant/80 p-4 flex flex-col gap-3"
           :class="{ 'lg:col-span-2': expandedMonthly[m.monthly_id] }"
         >
           <div class="flex flex-wrap items-start justify-between gap-2">
@@ -283,7 +283,7 @@
 
           <div
             v-if="m.name_used || m.signature"
-            class="rounded-xl bg-md-surface-container-lowest/90 border border-md-outline-variant/60 px-3 py-2 space-y-1 text-xs"
+            class="rounded-xl bg-md-surface-lowest/90 border border-md-outline-variant/60 px-3 py-2 space-y-1 text-xs"
           >
             <div v-if="m.name_used" class="flex flex-wrap items-center gap-1.5">
               <span class="font-medium text-md-on-surface">{{ m.name_used }}</span>
@@ -301,7 +301,7 @@
 
           <div
             v-if="m.has_chart"
-            class="flex items-center justify-between pt-2 border-t md-divider/60"
+            class="flex items-center justify-between pt-2 border-t border-md-outline-variant/60"
           >
             <button
               type="button"
@@ -323,7 +323,7 @@
             </button>
           </div>
 
-          <div v-if="expandedMonthly[m.monthly_id]" class="pt-3 border-t md-divider/60 space-y-3">
+          <div v-if="expandedMonthly[m.monthly_id]" class="pt-3 border-t border-md-outline-variant/60 space-y-3">
             <div v-if="loadingMonthly[m.monthly_id]" class="py-8 text-center text-xs text-md-on-surface-variant animate-pulse">
               {{ t('player.detailLoading') }}
             </div>
