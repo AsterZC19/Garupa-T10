@@ -12,11 +12,14 @@ from models import (
     MonthlyRanking,
     MonthlyScore,
     PlayerDegree,
+    PlayerScoreHistory,
     Score,
     db,
 )
 from routes.player import player_bp
-from services.player_career_service import clear_career_cache
+from services.player_career_service import career_cache, clear_career_cache
+from services.timeutil import now_ms
+from services.ttl_cache import TTLCache
 
 
 class PlayerCareerTests(unittest.TestCase):
@@ -131,7 +134,43 @@ class PlayerCareerTests(unittest.TestCase):
     def test_unknown_player_returns_empty_lists(self):
         resp = self.app.test_client().get('/api/player/123456789/career')
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.get_json(), {'uid': '123456789', 'events': [], 'monthly': []})
+        self.assertEqual(
+            resp.get_json(),
+            {'uid': '123456789', 'events': [], 'monthly': []},
+        )
+        # Empty career payloads must not pollute career_cache
+        self.assertNotIn('123456789', career_cache._data)
+
+    def test_has_chart_aligns_with_15m_cache_and_old_event_pruning(self):
+        now = now_ms()
+        # Old ended event (>24h ago) with only raw history and 1h cache -> has_chart False
+        db.session.add(Event(event_id='300', name='Old Pruned', event_type='versus', start_at=1000, end_at=5000))
+        db.session.add(Score(event_id='300', uid='7777', name='P', pt=1000000, rank=1, signature=''))
+        db.session.add(ChartDataCache(event_id='300', uid='7777', bucket_interval='1h', bucket_ts=2000, pt=500000))
+        db.session.add(PlayerScoreHistory(event_id='300', uid='7777', name='P', pt=1000000, timestamp=4900))
+
+        # Active/recent event with only raw history -> has_chart True
+        db.session.add(Event(event_id='350', name='Recent Active', event_type='versus', start_at=now - 3600_000, end_at=now + 3600_000))
+        db.session.add(Score(event_id='350', uid='7777', name='P', pt=2000000, rank=1, signature=''))
+        db.session.add(PlayerScoreHistory(event_id='350', uid='7777', name='P', pt=2000000, timestamp=now - 60_000))
+        db.session.commit()
+        clear_career_cache()
+
+        resp = self.app.test_client().get('/api/player/7777/career')
+        self.assertEqual(resp.status_code, 200)
+        by_eid = {e['event_id']: e for e in resp.get_json()['events']}
+        self.assertFalse(by_eid['300']['has_chart'])
+        self.assertTrue(by_eid['350']['has_chart'])
+
+    def test_ttl_cache_maxsize_evicts_oldest(self):
+        cache = TTLCache(60, maxsize=2)
+        cache.set('a', 1)
+        cache.set('b', 2)
+        cache.set('c', 3)
+        self.assertEqual(len(cache._data), 2)
+        self.assertIsNone(cache.get('a'))
+        self.assertEqual(cache.get('b'), 2)
+        self.assertEqual(cache.get('c'), 3)
 
 
 if __name__ == '__main__':

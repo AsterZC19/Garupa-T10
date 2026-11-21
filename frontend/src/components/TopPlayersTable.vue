@@ -10,7 +10,7 @@
       <div class="overflow-x-auto">
         <table class="min-w-full text-sm">
           <thead>
-            <tr class="bg-md-surface-container-high text-md-on-surface-variant">
+            <tr class="bg-md-surface-high text-md-on-surface-variant">
               <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">{{ t('table.rank') }}</th>
               <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">{{ t('table.uid') }}</th>
               <th class="px-3 py-2 text-center font-semibold whitespace-nowrap">{{ t('table.name') }}</th>
@@ -26,7 +26,7 @@
           <tbody>
             <template v-for="(p, idx) in rows" :key="p.uid">
               <!-- 玩家数据行 -->
-              <tr class="hover:bg-md-surface-container-low transition-colors">
+              <tr class="hover:bg-md-surface-low transition-colors">
                 <td class="px-3 py-1.5 text-center whitespace-nowrap tabular-nums">{{ p.rank || (idx + 1) }}</td>
                 <td class="px-3 py-1.5 text-center whitespace-nowrap tabular-nums">
                   <router-link v-if="p.uid" :to="`/player/${p.uid}`" class="text-md-primary hover:underline">
@@ -63,7 +63,7 @@
               </tr>
 
               <!-- 该玩家下方的一行热力图：仅用极淡底色 + 小边距与上方玩家信息区分，不占多余空间 -->
-              <tr class="bg-md-surface-container-low border-b border-md-outline-variant">
+              <tr class="bg-md-surface-low border-b border-md-outline-variant last:border-b-0">
                 <td :colspan="10" class="px-4 py-0.5">
                   <Heatmap
                     v-if="p.heatmap"

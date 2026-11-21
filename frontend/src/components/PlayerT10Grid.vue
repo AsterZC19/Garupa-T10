@@ -6,7 +6,7 @@
       <div
         v-for="degree in records"
         :key="degree.event_id"
-        class="p-2 bg-md-surface-container-high hover:bg-md-surface-container-highest rounded-xl transition-all duration-200 flex flex-col items-center border border-transparent hover:border-md-primary"
+        class="p-2 bg-md-surface-high hover:bg-md-surface-highest rounded-xl transition-all duration-200 flex flex-col items-center border border-transparent hover:border-md-primary"
       >
         <router-link :to="'/' + degree.event_id" class="text-center mb-1">
           <p class="font-bold text-md-primary text-[10px]">

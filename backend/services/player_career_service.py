@@ -4,6 +4,7 @@ from sqlalchemy import Integer, cast
 
 from models import (
     ChartDataCache,
+    ChartPoint,
     Event,
     MonthlyChartPoint,
     MonthlyRanking,
@@ -12,10 +13,11 @@ from models import (
     PlayerScoreHistory,
     Score,
 )
+from services.timeutil import now_ms
 from services.ttl_cache import TTLCache
 
 
-career_cache = TTLCache(120)
+career_cache = TTLCache(120, maxsize=512)
 
 
 def clear_career_cache():
@@ -95,16 +97,38 @@ def _build_event_records(uid):
 
         chart_event_ids.update(
             str(r[0]) for r in ChartDataCache.query.with_entities(ChartDataCache.event_id)
-            .filter(ChartDataCache.uid == uid, ChartDataCache.event_id.in_(local_event_ids))
+            .filter(
+                ChartDataCache.uid == uid,
+                ChartDataCache.bucket_interval == '15m',
+                ChartDataCache.event_id.in_(local_event_ids),
+            )
             .distinct().all()
         )
-        missing_chart_ids = [eid for eid in local_event_ids if eid not in chart_event_ids]
-        if missing_chart_ids:
+        current_time_ms = now_ms()
+        # Match event_query_service.get_chart_series: old pruned events (>24h after end)
+        # return {} when 15m ChartDataCache is absent instead of falling back to raw history.
+        live_fallback_ids = [
+            eid for eid in local_event_ids
+            if eid not in chart_event_ids
+            and not (
+                events_map.get(eid)
+                and (events_map[eid].end_at or 0) > 0
+                and current_time_ms > events_map[eid].end_at + 24 * 3600 * 1000
+            )
+        ]
+        if live_fallback_ids:
             chart_event_ids.update(
                 str(r[0]) for r in PlayerScoreHistory.query.with_entities(PlayerScoreHistory.event_id)
-                .filter(PlayerScoreHistory.uid == uid, PlayerScoreHistory.event_id.in_(missing_chart_ids))
+                .filter(PlayerScoreHistory.uid == uid, PlayerScoreHistory.event_id.in_(live_fallback_ids))
                 .distinct().all()
             )
+            still_missing_ids = [eid for eid in live_fallback_ids if eid not in chart_event_ids]
+            if still_missing_ids:
+                chart_event_ids.update(
+                    str(r[0]) for r in ChartPoint.query.with_entities(ChartPoint.event_id)
+                    .filter(ChartPoint.uid == uid, ChartPoint.event_id.in_(still_missing_ids))
+                    .distinct().all()
+                )
 
     records = []
     for eid in all_event_ids:
@@ -228,4 +252,6 @@ def get_player_career(uid):
         'events': _build_event_records(uid_str),
         'monthly': _build_monthly_records(uid_str),
     }
-    return career_cache.set(uid_str, payload)
+    if payload['events'] or payload['monthly']:
+        return career_cache.set(uid_str, payload)
+    return payload

@@ -4,9 +4,6 @@
     <section v-if="trendEvents.length > 0" class="md-elevated-card p-4 sm:p-6">
       <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h3 class="md-section-title">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md-section-title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 17l6-6 4 4 8-8m0 0h-5m5 0v5" />
-          </svg>
           <span>{{ t('player.eventTrends') }}</span>
         </h3>
         <span class="text-xs text-md-on-surface-variant tabular-nums">
@@ -29,7 +26,7 @@
           <button
             type="button"
             @click="compareEventIds = []"
-            class="md-text-button h-7 px-3 text-xs border border-md-outline-variant/80"
+            class="md-text-button h-7 px-3 text-xs border border-md-outline-variant"
           >
             {{ t('player.compareClear') }}
           </button>
@@ -54,7 +51,7 @@
         <article
           v-for="ev in trendEvents"
           :key="ev.event_id"
-          class="rounded-2xl bg-md-surface-low/70 border border-md-outline-variant/80 p-4 flex flex-col gap-3 transition-colors hover:border-md-outline"
+          class="rounded-2xl bg-md-surface-low border border-md-outline-variant p-4 flex flex-col gap-3 transition-colors hover:border-md-outline"
           :class="{ 'lg:col-span-2': expandedEvents[ev.event_id] }"
         >
           <!-- 头部：期数 + 类型 + 标题 + 跳转 -->
@@ -81,66 +78,52 @@
 
             <router-link
               :to="`/${ev.event_id}`"
-              class="md-text-button h-7 px-2.5 text-xs border border-md-outline-variant/70 flex-shrink-0"
+              class="md-text-button h-7 px-2.5 text-xs border border-md-outline-variant flex-shrink-0"
             >
               {{ t('player.viewEventPage') }}
             </router-link>
           </div>
 
-          <!-- PT 与分差 -->
-          <div v-if="ev.pt !== null && ev.pt !== undefined" class="flex flex-wrap items-baseline justify-between gap-2 pt-1">
-            <div class="tabular-nums">
+          <!-- 当时冲榜名字/签名与 PT（同一卡片容器内左名右分） -->
+          <div
+            v-if="(ev.pt !== null && ev.pt !== undefined) || (ev.has_local_detail && (ev.name_used || ev.signature))"
+            class="rounded-xl bg-md-surface-lowest border border-md-outline-variant px-3 py-2 flex flex-wrap items-center justify-between gap-3"
+          >
+            <div
+              v-if="ev.has_local_detail && (ev.name_used || ev.signature)"
+              class="min-w-0 flex-1 space-y-0.5 text-xs"
+            >
+              <div v-if="ev.name_used" class="flex flex-wrap items-center gap-1.5">
+                <span class="font-medium text-md-on-surface truncate">{{ ev.name_used }}</span>
+                <span
+                  v-if="currentName && ev.name_used !== currentName"
+                  class="px-1.5 py-0.5 rounded bg-md-secondary-container text-md-on-secondary-container text-[10px] font-semibold"
+                >
+                  {{ t('player.nameUsedAtEvent', { name: ev.name_used }) }}
+                </span>
+              </div>
+              <p v-if="ev.signature" class="text-md-on-surface-variant italic break-words">
+                {{ ev.signature }}
+              </p>
+            </div>
+
+            <div v-if="ev.pt !== null && ev.pt !== undefined" class="tabular-nums flex-shrink-0 ml-auto text-right">
               <span class="text-xl font-black text-md-pt leading-tight">
                 {{ ev.pt.toLocaleString() }}
               </span>
               <span class="text-[11px] font-semibold text-md-on-surface-variant ml-1">PT</span>
             </div>
-            <div class="text-[11px] font-medium space-x-2 tabular-nums">
-              <span v-if="ev.rank === 1 && ev.lead_to_second !== null" class="text-md-increment">
-                {{ t('player.leadBy', { pt: ev.lead_to_second.toLocaleString() }) }}
-              </span>
-              <template v-else>
-                <span v-if="ev.gap_to_first > 0" class="text-md-on-surface-variant">
-                  {{ t('player.gapToFirst', { pt: ev.gap_to_first.toLocaleString() }) }}
-                </span>
-                <span
-                  v-if="ev.gap_to_prev !== null && ev.gap_to_prev !== ev.gap_to_first"
-                  class="text-md-on-surface-variant"
-                >
-                  {{ t('player.gapToPrev', { pt: ev.gap_to_prev.toLocaleString() }) }}
-                </span>
-              </template>
-            </div>
-          </div>
-
-          <!-- 当时冲榜名字与签名（呼应改名历史） -->
-          <div
-            v-if="ev.has_local_detail && (ev.name_used || ev.signature)"
-            class="rounded-xl bg-md-surface-lowest/90 border border-md-outline-variant/60 px-3 py-2 space-y-1 text-xs"
-          >
-            <div v-if="ev.name_used" class="flex flex-wrap items-center gap-1.5">
-              <span class="font-medium text-md-on-surface">{{ ev.name_used }}</span>
-              <span
-                v-if="currentName && ev.name_used !== currentName"
-                class="px-1.5 py-0.5 rounded bg-md-secondary-container text-md-on-secondary-container text-[10px] font-semibold"
-              >
-                {{ t('player.nameUsedAtEvent', { name: ev.name_used }) }}
-              </span>
-            </div>
-            <p v-if="ev.signature" class="text-md-on-surface-variant italic break-words">
-              {{ ev.signature }}
-            </p>
           </div>
 
           <!-- 交互控制栏 -->
           <div
             v-if="ev.has_local_detail && ev.has_chart"
-            class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-md-outline-variant/60"
+            class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-md-outline-variant"
           >
             <button
               type="button"
               @click="toggleEventDetail(ev)"
-              class="md-text-button h-8 px-3 text-xs border border-md-outline-variant/80"
+              class="md-text-button h-8 px-3 text-xs border border-md-outline-variant"
             >
               <span>{{ expandedEvents[ev.event_id] ? t('player.collapseDetail') : t('player.expandDetail') }}</span>
               <svg
@@ -170,7 +153,7 @@
           <!-- 展开详情：个人 PT 曲线 + 同场参考线 -->
           <div
             v-if="expandedEvents[ev.event_id]"
-            class="pt-3 border-t border-md-outline-variant/60 space-y-3"
+            class="pt-3 border-t border-md-outline-variant space-y-3"
           >
             <div v-if="loadingEvents[ev.event_id]" class="py-8 text-center text-xs text-md-on-surface-variant animate-pulse">
               {{ t('player.detailLoading') }}
@@ -209,9 +192,6 @@
     <section v-if="monthlyRecords.length > 0" class="md-elevated-card p-4 sm:p-6">
       <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h3 class="md-section-title">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md-section-title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
           <span>{{ t('player.monthlyTrends') }}</span>
         </h3>
         <span class="text-xs text-md-on-surface-variant tabular-nums">{{ monthlyRecords.length }}</span>
@@ -221,7 +201,7 @@
         <article
           v-for="m in monthlyRecords"
           :key="m.monthly_id"
-          class="rounded-2xl bg-md-surface-low/70 border border-md-outline-variant/80 p-4 flex flex-col gap-3"
+          class="rounded-2xl bg-md-surface-low border border-md-outline-variant p-4 flex flex-col gap-3"
           :class="{ 'lg:col-span-2': expandedMonthly[m.monthly_id] }"
         >
           <div class="flex flex-wrap items-start justify-between gap-2">
@@ -244,7 +224,7 @@
 
             <router-link
               :to="`/monthly/${m.monthly_id}`"
-              class="md-text-button h-7 px-2.5 text-xs border border-md-outline-variant/70 flex-shrink-0"
+              class="md-text-button h-7 px-2.5 text-xs border border-md-outline-variant flex-shrink-0"
             >
               {{ t('player.viewMonthlyPage') }}
             </router-link>
@@ -262,28 +242,12 @@
                 {{ m.pt.toLocaleString() }}
                 <span class="text-[11px] font-semibold text-md-on-surface-variant">PT</span>
               </div>
-              <div class="text-[11px] font-medium mt-0.5 space-x-2">
-                <span v-if="m.rank === 1 && m.lead_to_second !== null" class="text-md-increment">
-                  {{ t('player.leadBy', { pt: m.lead_to_second.toLocaleString() }) }}
-                </span>
-                <template v-else>
-                  <span v-if="m.gap_to_first > 0" class="text-md-on-surface-variant">
-                    {{ t('player.gapToFirst', { pt: m.gap_to_first.toLocaleString() }) }}
-                  </span>
-                  <span
-                    v-if="m.gap_to_prev !== null && m.gap_to_prev !== m.gap_to_first"
-                    class="text-md-on-surface-variant"
-                  >
-                    {{ t('player.gapToPrev', { pt: m.gap_to_prev.toLocaleString() }) }}
-                  </span>
-                </template>
-              </div>
             </div>
           </div>
 
           <div
             v-if="m.name_used || m.signature"
-            class="rounded-xl bg-md-surface-lowest/90 border border-md-outline-variant/60 px-3 py-2 space-y-1 text-xs"
+            class="rounded-xl bg-md-surface-lowest border border-md-outline-variant px-3 py-2 space-y-1 text-xs"
           >
             <div v-if="m.name_used" class="flex flex-wrap items-center gap-1.5">
               <span class="font-medium text-md-on-surface">{{ m.name_used }}</span>
@@ -301,12 +265,12 @@
 
           <div
             v-if="m.has_chart"
-            class="flex items-center justify-between pt-2 border-t border-md-outline-variant/60"
+            class="flex items-center justify-between pt-2 border-t border-md-outline-variant"
           >
             <button
               type="button"
               @click="toggleMonthlyDetail(m)"
-              class="md-text-button h-8 px-3 text-xs border border-md-outline-variant/80"
+              class="md-text-button h-8 px-3 text-xs border border-md-outline-variant"
             >
               <span>{{ expandedMonthly[m.monthly_id] ? t('player.collapseDetail') : t('player.expandDetail') }}</span>
               <svg
@@ -323,7 +287,7 @@
             </button>
           </div>
 
-          <div v-if="expandedMonthly[m.monthly_id]" class="pt-3 border-t border-md-outline-variant/60 space-y-3">
+          <div v-if="expandedMonthly[m.monthly_id]" class="pt-3 border-t border-md-outline-variant space-y-3">
             <div v-if="loadingMonthly[m.monthly_id]" class="py-8 text-center text-xs text-md-on-surface-variant animate-pulse">
               {{ t('player.detailLoading') }}
             </div>
@@ -364,7 +328,7 @@ import PlayerCareerChart from './PlayerCareerChart.vue';
 import { formatTs } from '../utils.js';
 import { useI18n } from '../i18n.js';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const props = defineProps({
   uid: { type: [String, Number], required: true },
@@ -384,8 +348,13 @@ const loadingMonthly = reactive({});
 const monthlyChartCache = reactive({});
 const showMonthlyRefsMap = reactive({});
 
+const eventDatasetMemo = new Map();
+const monthlyDatasetMemo = new Map();
+
 const compareEventIds = ref([]);
-const isCompareLoading = ref(false);
+const isCompareLoading = computed(() =>
+  compareEventIds.value.some((eid) => Boolean(loadingEvents[eid]))
+);
 
 const trendEvents = computed(() =>
   (props.mergedEvents || []).filter((ev) => ev.has_local_detail || ev.has_chart)
@@ -404,12 +373,14 @@ function resetLocalCaches() {
   ]) {
     Object.keys(obj).forEach((k) => delete obj[k]);
   }
+  eventDatasetMemo.clear();
+  monthlyDatasetMemo.clear();
   compareEventIds.value = [];
 }
 
 async function ensureEventChart(ev) {
   const eid = String(ev.event_id);
-  if (!ev.has_chart || eventChartCache[eid]) return;
+  if (!ev.has_chart || eventChartCache[eid] || loadingEvents[eid]) return;
 
   loadingEvents[eid] = true;
   try {
@@ -441,12 +412,7 @@ async function toggleCompare(eid) {
   compareEventIds.value = [...compareEventIds.value, idStr];
   const ev = trendEvents.value.find((item) => String(item.event_id) === idStr);
   if (ev && !eventChartCache[idStr]) {
-    isCompareLoading.value = true;
-    try {
-      await ensureEventChart(ev);
-    } finally {
-      isCompareLoading.value = false;
-    }
+    await ensureEventChart(ev);
   }
 }
 
@@ -505,12 +471,16 @@ function buildSingleSeriesDatasets(seriesMap, includeRefs, top1Uid = null, top10
 
 function singleEventDatasets(ev) {
   const eid = String(ev.event_id);
-  return buildSingleSeriesDatasets(
-    eventChartCache[eid],
-    Boolean(showRefsMap[eid]),
-    ev.top1_uid,
-    ev.top10_uid,
-  );
+  const seriesMap = eventChartCache[eid];
+  const includeRefs = Boolean(showRefsMap[eid]);
+  const key = [seriesMap, includeRefs, props.uid, props.currentName, ev.top1_uid, ev.top10_uid, locale.value];
+  const prev = eventDatasetMemo.get(eid);
+  if (prev && prev.key.every((v, idx) => v === key[idx])) {
+    return prev.val;
+  }
+  const val = buildSingleSeriesDatasets(seriesMap, includeRefs, ev.top1_uid, ev.top10_uid);
+  eventDatasetMemo.set(eid, { key, val });
+  return val;
 }
 
 const compareDatasets = computed(() => {
@@ -545,7 +515,7 @@ async function toggleMonthlyDetail(m) {
   if (next && showMonthlyRefsMap[mid] === undefined) {
     showMonthlyRefsMap[mid] = true;
   }
-  if (!next || !m.has_chart || monthlyChartCache[mid]) return;
+  if (!next || !m.has_chart || monthlyChartCache[mid] || loadingMonthly[mid]) return;
 
   loadingMonthly[mid] = true;
   try {
@@ -559,12 +529,17 @@ async function toggleMonthlyDetail(m) {
 }
 
 function singleMonthlyDatasets(m) {
-  return buildSingleSeriesDatasets(
-    monthlyChartCache[m.monthly_id],
-    Boolean(showMonthlyRefsMap[m.monthly_id]),
-    m.top1_uid,
-    m.top10_uid,
-  );
+  const mid = m.monthly_id;
+  const seriesMap = monthlyChartCache[mid];
+  const includeRefs = Boolean(showMonthlyRefsMap[mid]);
+  const key = [seriesMap, includeRefs, props.uid, props.currentName, m.top1_uid, m.top10_uid, locale.value];
+  const prev = monthlyDatasetMemo.get(mid);
+  if (prev && prev.key.every((v, idx) => v === key[idx])) {
+    return prev.val;
+  }
+  const val = buildSingleSeriesDatasets(seriesMap, includeRefs, m.top1_uid, m.top10_uid);
+  monthlyDatasetMemo.set(mid, { key, val });
+  return val;
 }
 
 watch(() => props.uid, () => {
