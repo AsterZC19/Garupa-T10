@@ -22,6 +22,7 @@ from services.event_repository import (
     list_events as find_events,
     serialize_event,
 )
+from services.song_ranking_service import get_event_song_ranking
 
 events_bp = Blueprint('events', __name__)
 
@@ -32,6 +33,7 @@ _refresh_executor = ThreadPoolExecutor(max_workers=1)
 _last_refresh_time = {}
 _last_top_players_refresh_time = {}
 _last_heatmap_refresh_time = {}
+_last_song_ranking_refresh_time = {}
 _heatmap_compute_lock = threading.Lock()
 REFRESH_COOLDOWN = 30  # 30 seconds
 MAX_CACHED_REFRESH_TIMES = 50
@@ -39,7 +41,12 @@ MAX_CACHED_REFRESH_TIMES = 50
 
 def _cleanup_refresh_times():
     """Remove oldest entries to prevent unbounded growth."""
-    for d in (_last_refresh_time, _last_top_players_refresh_time, _last_heatmap_refresh_time):
+    for d in (
+        _last_refresh_time,
+        _last_top_players_refresh_time,
+        _last_heatmap_refresh_time,
+        _last_song_ranking_refresh_time,
+    ):
         if len(d) > MAX_CACHED_REFRESH_TIMES * 2:
             sorted_keys = sorted(d.keys(), key=lambda k: d[k])
             for k in sorted_keys[:-MAX_CACHED_REFRESH_TIMES]:
@@ -266,3 +273,21 @@ def get_heatmap_route(event_id):
             _refresh_executor.submit(_bg_refresh_heatmap, current_app._get_current_object(), event_id)
 
     return jsonify(result)
+
+
+@events_bp.route('/<int:event_id>/song_ranking', methods=['GET'])
+def get_song_ranking_route(event_id):
+    _cleanup_refresh_times()
+    event = _ensure_event(str(event_id))
+    if not event:
+        return jsonify({'error': 'event not found'}), 404
+    force_refresh = request.args.get('force') == 'true'
+    if force_refresh:
+        now = time.time()
+        last_refresh = _last_song_ranking_refresh_time.get(event_id, 0)
+        if now - last_refresh < REFRESH_COOLDOWN:
+            current_app.logger.info(f"Skipping force song_ranking refresh for event {event_id} due to cooldown.")
+            force_refresh = False
+        else:
+            _last_song_ranking_refresh_time[event_id] = now
+    return jsonify(get_event_song_ranking(event, force_refresh=force_refresh))

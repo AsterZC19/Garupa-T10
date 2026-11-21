@@ -59,6 +59,21 @@ class PlayerDegree(db.Model):
 
     __table_args__ = (db.Index('ix_player_degrees_uid_event_id', "uid", "event_id"), )
 
+
+class PlayerSongDegree(db.Model):
+    """Song Ranking (歌榜) T10 degree/record per player in degrees.db."""
+    __tablename__ = 'player_song_degrees'
+    __bind_key__ = 'degrees'
+    event_id = db.Column(db.Integer, primary_key=True)
+    music_id = db.Column(db.Integer, primary_key=True)
+    uid = db.Column(db.String, primary_key=True, index=True)
+    music_title = db.Column(db.String, nullable=True)
+    name = db.Column(db.String, nullable=True)
+    rank = db.Column(db.Integer, nullable=False)
+    score = db.Column(db.Integer, nullable=False)
+    degree_id = db.Column(db.Integer, nullable=True)
+    updated_at = db.Column(db.Integer, nullable=True)
+
 class ChartDataCache(db.Model):
     __tablename__ = 'chart_data_cache'
     event_id = db.Column(db.String, primary_key=True)
@@ -179,3 +194,18 @@ class PlayerNameObservation(db.Model):
     source = db.Column(db.String, primary_key=True)
     name = db.Column(db.String, nullable=False)
     observed_at = db.Column(db.BigInteger, nullable=False)
+
+
+class EventSongRanking(db.Model):
+    """Final Song Ranking (歌榜) T10 snapshot per (event_id, music_id).
+
+    Only persisted for ended events; active events are proxied with a short
+    in-memory TTLCache to keep SQLite writes and disk usage minimal.
+    music_id == -1 represents Medley Live aggregate song ranking.
+    """
+    __tablename__ = 'event_song_rankings'
+    event_id = db.Column(db.Integer, primary_key=True)
+    music_id = db.Column(db.Integer, primary_key=True)
+    music_title = db.Column(db.String, nullable=True)
+    entries_json = db.Column(db.Text, nullable=False, default='[]')
+    updated_at = db.Column(db.Integer, nullable=True)

@@ -1,4 +1,5 @@
-"""Read-only career record aggregation across events and monthly rankings."""
+"""Read-only career record aggregation across events, monthly, and song rankings."""
+import json
 from collections import defaultdict
 from sqlalchemy import Integer, cast
 
@@ -11,6 +12,7 @@ from models import (
     MonthlyScore,
     PlayerDegree,
     PlayerScoreHistory,
+    PlayerSongDegree,
     Score,
 )
 from services.timeutil import now_ms
@@ -237,11 +239,47 @@ def _build_monthly_records(uid):
     return records
 
 
+def _build_song_ranking_records(uid):
+    """Query indexed PlayerSongDegree in degrees.db (zero external HTTP calls)."""
+    rows = (
+        PlayerSongDegree.query
+        .filter(PlayerSongDegree.uid == uid)
+        .order_by(PlayerSongDegree.event_id.desc(), PlayerSongDegree.music_id.asc())
+        .all()
+    )
+    if not rows:
+        return []
+
+    matched_eids = list({str(r.event_id) for r in rows})
+    events_map = {
+        str(ev.event_id): ev
+        for ev in Event.query.filter(Event.event_id.in_(matched_eids)).all()
+    }
+
+    records = []
+    for row in rows:
+        ev = events_map.get(str(row.event_id))
+        records.append({
+            'event_id': int(row.event_id),
+            'event_name': ev.name if ev else None,
+            'event_type': ev.event_type if ev else None,
+            'music_id': int(row.music_id),
+            'music_title': row.music_title,
+            'is_medley_aggregate': int(row.music_id) == -1,
+            'rank': int(row.rank or 0),
+            'score': int(row.score or 0),
+            'degree_id': int(row.degree_id) if row.degree_id is not None else None,
+            'name': row.name or uid,
+            'updated_at': row.updated_at,
+        })
+    return records
+
+
 def get_player_career(uid):
-    """Return a player's locally archived event and monthly T10 career records."""
+    """Return a player's locally archived event, monthly, and song T10 career records."""
     uid_str = str(uid).strip()
     if not uid_str:
-        return {'uid': '', 'events': [], 'monthly': []}
+        return {'uid': '', 'events': [], 'monthly': [], 'song_ranking_records': []}
 
     cached = career_cache.get(uid_str)
     if cached is not None:
@@ -251,7 +289,8 @@ def get_player_career(uid):
         'uid': uid_str,
         'events': _build_event_records(uid_str),
         'monthly': _build_monthly_records(uid_str),
+        'song_ranking_records': _build_song_ranking_records(uid_str),
     }
-    if payload['events'] or payload['monthly']:
+    if payload['events'] or payload['monthly'] or payload['song_ranking_records']:
         return career_cache.set(uid_str, payload)
     return payload

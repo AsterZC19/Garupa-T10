@@ -2,6 +2,7 @@ from sqlalchemy import Integer, cast, func
 from models import db, Event, Score, ChartPoint, PlayerScoreHistory, EventHeatmapCache
 from services.timeutil import now_ms
 from services.history_window import get_history_window
+from services.song_ranking_service import event_has_song_ranking
 
 
 def serialize_event(event):
@@ -12,7 +13,8 @@ def serialize_event(event):
         'start_at': event.start_at,
         'end_at': event.end_at,
         'banner_url': event.banner_url,
-        'description': event.description
+        'description': event.description,
+        'has_song_ranking': event_has_song_ranking(event.event_type),
     }
 
 

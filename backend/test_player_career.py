@@ -136,7 +136,7 @@ class PlayerCareerTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
             resp.get_json(),
-            {'uid': '123456789', 'events': [], 'monthly': []},
+            {'uid': '123456789', 'events': [], 'monthly': [], 'song_ranking_records': []},
         )
         # Empty career payloads must not pollute career_cache
         self.assertNotIn('123456789', career_cache._data)

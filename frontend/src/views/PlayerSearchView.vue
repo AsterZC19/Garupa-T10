@@ -81,9 +81,13 @@
             <!-- 右列：T10 记录、主乐队、综合力、乐队等级、角色等级、基建等级 -->
             <div class="lg:w-1/2 p-4 sm:p-6 space-y-6 border-t lg:border-t-0 lg:border-l md-divider">
 
-            <!-- T10 记录 -->
+            <!-- T10 记录（肝榜 + 歌榜） -->
             <div class="pt-2 border-b md-divider pb-6">
-              <PlayerT10Grid :records="mergedEventRecords" />
+              <PlayerT10Grid
+                :records="mergedEventRecords"
+                :song-records="songRankingRecords"
+                :all-degrees-data="allDegreesData"
+              />
             </div>
 
             <!-- 主乐队 (Responsive Scaling) -->
@@ -266,9 +270,11 @@
             <div class="text-xl font-bold text-md-on-surface">UID: {{ searchedUid }}</div>
             <p class="text-xs text-md-on-surface-variant">{{ t('player.localOnlyNotice') }}</p>
           </div>
-          <div v-if="mergedEventRecords.length > 0" class="pt-4 border-t md-divider">
+          <div v-if="mergedEventRecords.length > 0 || songRankingRecords.length > 0" class="pt-4 border-t md-divider">
             <PlayerT10Grid
               :records="mergedEventRecords"
+              :song-records="songRankingRecords"
+              :all-degrees-data="allDegreesData"
               grid-class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2"
             />
           </div>
@@ -372,12 +378,16 @@ const searchedUid = ref('');
 const playerData = ref(null);
 const isLoading = ref(false);
 const earnedDegrees = ref([]);
-const careerData = ref({ events: [], monthly: [] });
+const careerData = ref({ events: [], monthly: [], song_ranking_records: [] });
 const leaderCardIllustUrl = ref(null);
 let activeRequestId = 0;
 
+const songRankingRecords = computed(() => careerData.value?.song_ranking_records || []);
+
 const hasLocalCareer = computed(() =>
-  (careerData.value?.events?.length || 0) > 0 || (careerData.value?.monthly?.length || 0) > 0
+  (careerData.value?.events?.length || 0) > 0
+  || (careerData.value?.monthly?.length || 0) > 0
+  || songRankingRecords.value.length > 0
 );
 
 const currentPlayerName = computed(() =>
@@ -495,7 +505,7 @@ const fetchPlayerData = async (playerUid) => {
   isLoading.value = true;
   playerData.value = null;
   earnedDegrees.value = [];
-  careerData.value = { events: [], monthly: [] };
+  careerData.value = { events: [], monthly: [], song_ranking_records: [] };
   searchedUid.value = playerUid;
   try {
     const [playerRes, degreesRes, careerRes] = await Promise.allSettled([
@@ -507,8 +517,8 @@ const fetchPlayerData = async (playerUid) => {
     playerData.value = playerRes.status === 'fulfilled' ? playerRes.value.data : null;
     earnedDegrees.value = degreesRes.status === 'fulfilled' ? (degreesRes.value.data || []) : [];
     careerData.value = careerRes.status === 'fulfilled'
-      ? (careerRes.value.data || { events: [], monthly: [] })
-      : { events: [], monthly: [] };
+      ? (careerRes.value.data || { events: [], monthly: [], song_ranking_records: [] })
+      : { events: [], monthly: [], song_ranking_records: [] };
   } catch (error) {
     if (reqId !== activeRequestId) return;
     console.error('获取玩家数据失败:', error);
@@ -538,7 +548,7 @@ watch(() => route.params.uid, (newUid) => {
     searchedUid.value = '';
     playerData.value = null;
     earnedDegrees.value = [];
-    careerData.value = { events: [], monthly: [] };
+    careerData.value = { events: [], monthly: [], song_ranking_records: [] };
   }
 }, { immediate: true });
 </script>
