@@ -26,8 +26,7 @@
           </div>
           <div class="text-center text-xs text-md-on-surface-variant mt-3">
             {{ t('event.bestdoriPrefix') }}
-            <a href="https://bestdori.com" target="_blank" rel="noopener" class="underline hover:text-md-primary">Bestdori</a>
-            <template v-if="t('event.bestdoriSuffix')"> {{ t('event.bestdoriSuffix') }}</template>
+            <a href="https://bestdori.com" target="_blank" rel="noopener" class="underline hover:text-md-primary">Bestdori</a><template v-if="t('event.bestdoriSuffix')">{{ ' ' + t('event.bestdoriSuffix') }}</template>
           </div>
         </div>
         <div v-if="currentEvent.banner_url" class="flex-shrink-0 flex items-center max-w-full">

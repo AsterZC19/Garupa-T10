@@ -40,9 +40,6 @@
       <!-- T10 时速 + 热力图 -->
       <div v-if="!isUpcoming" :class="{ 'opacity-50': isRefreshing }">
         <h3 class="md-section-title mb-3">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md-section-title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
           {{ t('monthly.t10SpeedTitle') }}
         </h3>
         <TopPlayersTable :players="topPlayers" :heatmap-data="heatmapData" />
@@ -52,9 +49,6 @@
       <div v-if="!isUpcoming">
         <div class="flex items-center justify-between mb-4">
           <h3 class="md-section-title">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md-section-title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3 13h2l3-8 4 12 3-6 2 2h4" />
-            </svg>
             {{ t('monthly.ptCurveTitle') }}
           </h3>
         </div>
