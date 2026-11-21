@@ -14,6 +14,7 @@ from services.event_repository import get_all_event_ids, get_event_ids_with_hist
 from services.heatmap import compute_heatmap_cache, heatmap_cache_covers_window
 from services.monthly_ingestion import ingest_monthly_master_list, record_active_monthly_top
 from services.monthly_heatmap import compute_monthly_heatmap_cache, monthly_heatmap_cache_covers_window
+from services.song_ranking_service import backfill_ended_song_rankings
 from services.timeutil import now_ms
 
 KEEP_MINUTES = 30  # minutes of per-minute data to keep per ended event
@@ -114,37 +115,38 @@ def update_t10_achievements(app):
 
             if not unprocessed_events:
                 logging.info("No new finished events to process for T10 achievements.")
-                return
+            else:
+                max_processed_id = last_processed_event_id
+                for event in unprocessed_events:
+                    logging.info(f"Processing T10 achievements for event: {event.event_id} - {event.name}")
+                    t10_scores = Score.query.filter(Score.event_id == event.event_id).order_by(Score.pt.desc()).limit(10).all()
 
-            max_processed_id = last_processed_event_id
-            for event in unprocessed_events:
-                logging.info(f"Processing T10 achievements for event: {event.event_id} - {event.name}")
-                t10_scores = Score.query.filter(Score.event_id == event.event_id).order_by(Score.pt.desc()).limit(10).all()
+                    for idx, score in enumerate(t10_scores, start=1):
+                        exists = PlayerDegree.query.filter_by(uid=score.uid, event_id=score.event_id).first()
+                        if not exists:
+                            degree_id = get_degree_id_for_rank(idx)
+                            if degree_id:
+                                db.session.add(PlayerDegree(
+                                    uid=score.uid,
+                                    event_id=score.event_id,
+                                    rank=idx,
+                                    degree_id=degree_id
+                                ))
 
-                for idx, score in enumerate(t10_scores, start=1):
-                    exists = PlayerDegree.query.filter_by(uid=score.uid, event_id=score.event_id).first()
-                    if not exists:
-                        degree_id = get_degree_id_for_rank(idx)
-                        if degree_id:
-                            db.session.add(PlayerDegree(
-                                uid=score.uid,
-                                event_id=score.event_id,
-                                rank=idx,
-                                degree_id=degree_id
-                            ))
+                    # --- Prune this event's data now that it has ended ---
+                    _prune_event_data(event, app)
 
-                # --- Prune this event's data now that it has ended ---
-                _prune_event_data(event, app)
+                    max_processed_id = max(max_processed_id, int(event.event_id))
 
-                max_processed_id = max(max_processed_id, int(event.event_id))
-
-            last_processed_event_state.value = str(max_processed_id)
-            db.session.commit()
-            logging.info(f"Successfully processed {len(unprocessed_events)} events for T10. Last processed event ID is now {max_processed_id}.")
+                last_processed_event_state.value = str(max_processed_id)
+                db.session.commit()
+                logging.info(f"Successfully processed {len(unprocessed_events)} events for T10. Last processed event ID is now {max_processed_id}.")
 
         except Exception as e:
             logging.error(f"An error occurred in update_t10_achievements: {e}", exc_info=True)
             db.session.rollback()
+
+    backfill_song_rankings_job(app)
 
 
 def update_latest_event(app):
@@ -213,6 +215,27 @@ def backfill_all_events_history(app):
         except Exception as e:
             logging.error(f"An error occurred in backfill_all_events_history: {e}", exc_info=True)
             db.session.rollback()
+
+
+_song_ranking_lock = threading.Lock()
+
+
+def backfill_song_rankings_job(app):
+    """Backfill final song rankings for ended challenge/versus/medley events."""
+    if not _song_ranking_lock.acquire(blocking=False):
+        logging.info("Song ranking backfill already running; skipping.")
+        return
+    try:
+        with app.app_context():
+            try:
+                count = backfill_ended_song_rankings()
+                if count:
+                    logging.info(f"Song ranking backfill: archived {count} ended event(s).")
+            except Exception as e:
+                logging.error(f"Song ranking backfill job failed: {e}", exc_info=True)
+                db.session.rollback()
+    finally:
+        _song_ranking_lock.release()
 
 
 _heatmap_lock = threading.Lock()
@@ -442,6 +465,7 @@ def init_scheduler(app):
     scheduler.add_job(refresh_heatmap_cache, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='heatmap', max_instances=1)
     scheduler.add_job(refresh_monthly_master, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='default', max_instances=1)
     scheduler.add_job(refresh_monthly_heatmap_cache, 'date', args=[app], run_date=startup_delay, misfire_grace_time=300, executor='heatmap', max_instances=1)
+    scheduler.add_job(backfill_song_rankings_job, 'date', args=[app], run_date=now + timedelta(seconds=12), misfire_grace_time=300, executor='default', max_instances=1)
 
     scheduler.start()
     logging.info("Scheduler started. Startup jobs scheduled to run immediately.")

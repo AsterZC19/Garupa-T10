@@ -1,0 +1,105 @@
+<template>
+  <div>
+    <!-- 肝榜 T10 记录 -->
+    <div>
+      <h3 class="text-lg font-bold text-md-on-surface mb-4 text-center">{{ t('player.t10Records') }}</h3>
+
+      <div v-if="records.length > 0" :class="gridClass">
+        <div
+          v-for="degree in records"
+          :key="degree.event_id"
+          class="p-2 bg-md-surface-high hover:bg-md-surface-highest rounded-xl transition-all duration-200 flex flex-col items-center border border-transparent hover:border-md-primary"
+        >
+          <router-link :to="'/' + degree.event_id" class="text-center mb-1">
+            <p class="font-bold text-md-primary text-[10px]">
+              {{ t('player.eventNum', { id: degree.event_id }) }}
+            </p>
+            <p class="text-[11px] text-md-on-surface-variant font-medium">
+              {{ t('player.rankPlace', { rank: degree.rank }) }}
+            </p>
+          </router-link>
+
+          <div class="w-full min-h-6 flex justify-center items-center overflow-visible">
+            <DegreeDisplay
+              :rank="Number(degree.rank)"
+              :event_id="String(degree.event_id)"
+              :displayWidth="104"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="text-center py-6">
+        <p class="text-md-on-surface-variant text-sm">{{ t('player.noT10Records') }}</p>
+      </div>
+    </div>
+
+    <!-- 歌榜 T10 记录 -->
+    <div class="mt-5 pt-4 border-t md-divider">
+      <h3 class="text-lg font-bold text-md-on-surface mb-4 text-center">{{ t('player.songRankingRecords') }}</h3>
+
+      <div v-if="songRecords.length > 0" :class="gridClass">
+        <div
+          v-for="rec in songRecords"
+          :key="`${rec.event_id}-${rec.music_id}`"
+          class="p-2 bg-md-surface-high hover:bg-md-surface-highest rounded-xl transition-all duration-200 flex flex-col items-center border border-transparent hover:border-md-primary min-w-0"
+        >
+          <router-link :to="'/' + rec.event_id" class="text-center mb-1 w-full min-w-0">
+            <p class="font-bold text-md-primary text-[10px]">
+              {{ t('player.eventNum', { id: rec.event_id }) }}
+            </p>
+            <p
+              class="text-[10px] text-md-on-surface-variant truncate px-0.5"
+              :title="songTitle(rec)"
+            >
+              {{ songTitle(rec) }}
+            </p>
+            <p class="text-[11px] text-md-on-surface-variant font-medium">
+              {{ t('player.rankPlace', { rank: rec.rank }) }}
+              <span v-if="typeof rec.score === 'number'" class="text-md-pt font-semibold tabular-nums ml-1">
+                {{ rec.score.toLocaleString() }}
+              </span>
+            </p>
+          </router-link>
+
+          <div
+            v-if="rec.degree_id && allDegreesData"
+            class="w-full min-h-6 flex justify-center items-center overflow-visible"
+          >
+            <DegreeDisplay
+              :degree-id="Number(rec.degree_id)"
+              :all-degrees-data="allDegreesData"
+              :displayWidth="104"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="text-center py-6">
+        <p class="text-md-on-surface-variant text-sm">{{ t('player.noSongT10Records') }}</p>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import DegreeDisplay from './DegreeDisplay.vue';
+import { useI18n } from '../i18n.js';
+
+const { t } = useI18n();
+
+defineProps({
+  records: { type: Array, default: () => [] },
+  songRecords: { type: Array, default: () => [] },
+  allDegreesData: { type: Object, default: null },
+  gridClass: { type: String, default: 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-2' },
+});
+
+function songTitle(rec) {
+  if (!rec) return '';
+  if (rec.is_medley_aggregate || rec.music_id === -1) {
+    return t('songTable.medleyAggregate');
+  }
+  return rec.music_title || t('songTable.songLabel', { id: rec.music_id });
+}
+</script>

@@ -39,6 +39,7 @@ import models  # noqa
 from services.player_name_history import init_name_history
 
 with app.app_context():
+    db.create_all()
     init_name_history()
 
 # register routes

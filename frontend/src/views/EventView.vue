@@ -37,24 +37,65 @@
     </section>
 
     <main class="space-y-8">
-      <!-- T10 时速 · 每位玩家一行 + 下方热力图，十人连成一张卡片 -->
+      <!-- T10 时速 / 歌榜 T10 -->
       <div v-if="!isUpcoming" :class="{ 'opacity-50': isRefreshing }">
-        <h3 class="md-section-title mb-3">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md-section-title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          {{ t('event.t10SpeedTitle') }}
-        </h3>
-        <TopPlayersTable :players="topPlayers" :heatmap-data="heatmapData" />
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3 min-h-10">
+          <div class="flex flex-wrap items-center gap-3">
+            <h3 class="md-section-title">
+              {{ rankingMode === 'song' ? t('event.songRankingTitle') : t('event.t10SpeedTitle') }}
+            </h3>
+            <div v-if="hasSongRanking" class="md-segmented" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                :aria-selected="rankingMode === 'pt'"
+                class="md-segmented-btn"
+                :class="{ 'is-active': rankingMode === 'pt' }"
+                @click="setRankingMode('pt')"
+              >
+                {{ t('event.tabPtRanking') }}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                :aria-selected="rankingMode === 'song'"
+                class="md-segmented-btn"
+                :class="{ 'is-active': rankingMode === 'song' }"
+                @click="setRankingMode('song')"
+              >
+                {{ t('event.tabSongRanking') }}
+              </button>
+            </div>
+          </div>
+
+          <!-- 歌榜：单曲/组曲显示标签，多曲显示下拉选择 -->
+          <div v-if="rankingMode === 'song' && hasSongRanking && !isSongRankingLoading" class="flex items-center gap-2">
+            <MdSelect
+              v-if="songOptions.length > 1"
+              :options="songOptions"
+              v-model="selectedSongId"
+              class="w-56 sm:w-64"
+              :placeholder="t('event.selectSongPlaceholder')"
+            />
+            <span v-else-if="activeSongLabel" class="md-chip md-chip--primary">
+              {{ activeSongLabel }}
+            </span>
+          </div>
+        </div>
+
+        <TopPlayersTable v-if="rankingMode === 'pt'" :players="topPlayers" :heatmap-data="heatmapData" />
+        <SongRankingTable
+          v-else
+          :entries="activeSong?.entries || []"
+          :updated-at="activeSong?.updated_at ?? null"
+          :loading="isSongRankingLoading"
+        />
       </div>
 
-      <!-- 时速曲线 -->
-      <div v-if="!isUpcoming">
+      <!-- 时速曲线（仅肝榜模式显示） -->
+      <div v-if="!isUpcoming && rankingMode === 'pt'">
         <div class="flex items-center justify-between mb-4">
           <h3 class="md-section-title">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md-section-title-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3 13h2l3-8 4 12 3-6 2 2h4" />
-            </svg>
             {{ t('event.speedCurveTitle') }}
           </h3>
         </div>
@@ -87,8 +128,10 @@
 <script setup>
 import api from '../api'
 import EventSelector from '../components/EventSelector.vue'
+import MdSelect from '../components/MdSelect.vue'
 import ModeToggle from '../components/ModeToggle.vue'
 import TopPlayersTable from '../components/TopPlayersTable.vue'
+import SongRankingTable from '../components/SongRankingTable.vue'
 import ChartComponent from '../components/ChartComponent.vue'
 import { shallowRef, ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -113,6 +156,42 @@ const chartSeries = shallowRef({})
 const heatmapData = ref({ ref_ts: null, global_max: 0, players: {} })
 const lastTopPlayersContext = ref(null)
 const isInitialEventLoad = ref(true)
+
+const SONG_RANKING_TYPES = new Set(['challenge', 'versus', 'medley'])
+const rankingMode = ref('pt') // 'pt' | 'song'
+const songRankingData = ref(null)
+const isSongRankingLoading = ref(false)
+const selectedSongId = ref(null)
+let songRankingRequestId = 0
+
+const hasSongRanking = computed(() => {
+  if (!currentEvent.value) return false
+  if (typeof currentEvent.value.has_song_ranking === 'boolean') {
+    return currentEvent.value.has_song_ranking
+  }
+  return SONG_RANKING_TYPES.has(currentEvent.value.type)
+})
+
+function formatSongLabel(song) {
+  if (!song) return ''
+  if (song.is_medley_aggregate || song.music_id === -1) {
+    return t('songTable.medleyAggregate')
+  }
+  return song.music_title || t('songTable.songLabel', { id: song.music_id })
+}
+
+const songList = computed(() => songRankingData.value?.songs || [])
+const songOptions = computed(() =>
+  songList.value.map(s => ({
+    value: s.music_id,
+    label: formatSongLabel(s),
+  }))
+)
+const activeSong = computed(() => {
+  if (!songList.value.length) return null
+  return songList.value.find(s => s.music_id === selectedSongId.value) || songList.value[0]
+})
+const activeSongLabel = computed(() => formatSongLabel(activeSong.value))
 
 const eventName = computed(() => currentEvent.value ? currentEvent.value.name : t('common.loading'))
 
@@ -174,6 +253,44 @@ async function loadHeatmapData(eid, uids = []) {
   }
 }
 
+async function loadSongRanking(eid, force = false) {
+  if (!eid) return
+  const reqId = ++songRankingRequestId
+  isSongRankingLoading.value = true
+  try {
+    const params = new URLSearchParams()
+    if (force) params.append('force', 'true')
+    const query = params.toString()
+    const res = await api.get(`/api/events/${eid}/song_ranking${query ? `?${query}` : ''}`)
+    if (reqId !== songRankingRequestId || String(selectedEventId.value) !== String(eid)) return
+    songRankingData.value = res.data
+    const songs = res.data?.songs || []
+    if (songs.length > 0 && !songs.some(s => s.music_id === selectedSongId.value)) {
+      selectedSongId.value = songs[0].music_id
+    } else if (songs.length === 0) {
+      selectedSongId.value = null
+    }
+  } catch (error) {
+    if (reqId !== songRankingRequestId) return
+    console.error('获取歌榜数据失败:', error)
+    // Keep null so switching back to the song tab retries automatically.
+    songRankingData.value = null
+    selectedSongId.value = null
+  } finally {
+    if (reqId === songRankingRequestId) {
+      isSongRankingLoading.value = false
+    }
+  }
+}
+
+function setRankingMode(mode) {
+  if (mode === rankingMode.value) return
+  rankingMode.value = mode
+  if (mode === 'song' && selectedEventId.value && !songRankingData.value && !isSongRankingLoading.value) {
+    loadSongRanking(selectedEventId.value)
+  }
+}
+
 async function loadTableData(eid, hour, force = false, loadChart = true) {
   if (!eid) return
   isRefreshing.value = true
@@ -195,12 +312,26 @@ async function loadTableData(eid, hour, force = false, loadChart = true) {
     }
     currentEvent.value = eventRes.data
 
+    if (!hasSongRanking.value) {
+      rankingMode.value = 'pt'
+      songRankingData.value = null
+      selectedSongId.value = null
+    }
+
     // 未开始的活动：没有榜单/热力图/曲线数据，跳过后续请求（倒计时归零时再拉）
     if (isUpcoming.value) {
+      rankingMode.value = 'pt'
+      songRankingData.value = null
+      selectedSongId.value = null
       topPlayers.value = []
       heatmapData.value = { ref_ts: null, global_max: 0, players: {} }
       chartSeries.value = {}
       return
+    }
+
+    if (rankingMode.value === 'song' && hasSongRanking.value) {
+      const shouldForceSong = force && (!isEventEnded() || !(songRankingData.value?.songs?.length))
+      await loadSongRanking(eid, shouldForceSong)
     }
 
     const params = new URLSearchParams()
@@ -287,6 +418,10 @@ watch(() => route.params.eventId, (newId) => {
   // 统一用字符串存 selectedEventId，与 EventSelector 选项值（后端 event_id 为字符串）严格匹配
   const newEventId = newId ? String(newId) : null;
   selectedEventId.value = newEventId;
+  songRankingRequestId++;
+  isSongRankingLoading.value = false;
+  songRankingData.value = null;
+  selectedSongId.value = null;
   if (newEventId) {
     const forceInitialRefresh = isInitialEventLoad.value;
     isInitialEventLoad.value = false;
@@ -391,5 +526,36 @@ function eventTypeLabel(type) {
     opacity: 1;
     transform: translateY(0);
   }
+}
+</style>
+
+<style scoped>
+.md-segmented {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 9999px;
+  background-color: var(--md-sys-color-surface-container-high);
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.md-segmented-btn {
+  padding: 0.3rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
+  transition: background-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.md-segmented-btn:hover {
+  background-color: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent);
+}
+
+.md-segmented-btn.is-active {
+  background-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  box-shadow: var(--md-elevation-1);
 }
 </style>
